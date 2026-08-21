@@ -141,9 +141,12 @@ npm run lint          # ESLint
    ```bash
    DATABASE_URL="<production-url>" npm run db:seed
    ```
-8. `vercel.json` already schedules `/api/cron/sync-overdue` every 15 minutes via
-   Vercel Cron so overdue tasks and Telegram alerts fire even when nobody has the
-   app open.
+8. `vercel.json` already schedules `/api/cron/sync-overdue` once a day (03:00 UTC)
+   via Vercel Cron, so overdue tasks and Telegram alerts still fire even when
+   nobody has the app open. This runs on top of the check that already happens on
+   every page load. The free Vercel **Hobby** plan only allows daily cron jobs — if
+   you're on the **Pro** plan, you can tighten this to e.g. `*/15 * * * *` (every
+   15 minutes) in `vercel.json` for faster overdue detection.
 
 No custom domain is required — the app works fine on the default
 `your-app.vercel.app` URL.
