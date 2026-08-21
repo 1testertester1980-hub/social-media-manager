@@ -7,6 +7,36 @@ export function monthRange(year: number, month: number) {
   return { start, end };
 }
 
+const POINTS_PER_PUBLISHED = 3;
+const POINTS_PER_OVERDUE = 3;
+
+/**
+ * Worker score: +3 per published Reel, -3 per Reel that missed its
+ * deadline. Derived live from current task status (not a stored counter),
+ * so it self-corrects if an admin later publishes an overdue task or
+ * changes a task's status — no double-counting or manual reconciliation.
+ */
+export async function getUserPoints(userId: string) {
+  const [published, overdue] = await Promise.all([
+    prisma.contentTask.count({ where: { assignedUserId: userId, status: "PUBLISHED" } }),
+    prisma.contentTask.count({ where: { assignedUserId: userId, status: "OVERDUE" } }),
+  ]);
+  return {
+    points: published * POINTS_PER_PUBLISHED - overdue * POINTS_PER_OVERDUE,
+    published,
+    overdue,
+  };
+}
+
+/** Points for every worker, for admin-facing lists. */
+export async function getAllWorkerPoints() {
+  const workers = await prisma.user.findMany({ where: { role: "WORKER" }, select: { id: true } });
+  const entries = await Promise.all(
+    workers.map(async (w) => [w.id, await getUserPoints(w.id)] as const)
+  );
+  return new Map(entries);
+}
+
 export async function getDashboardData() {
   const now = new Date();
   const { start, end } = monthRange(now.getFullYear(), now.getMonth() + 1);
