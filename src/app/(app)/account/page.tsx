@@ -54,6 +54,15 @@ export default async function AccountPage() {
                   {score.overdue}× po termíne (-{score.overdue * 3} b.)
                 </span>
               </div>
+              {score.bonusPoints !== 0 && (
+                <div className="col-span-2 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2">
+                  <Trophy className="h-4 w-4 text-amber-600" />
+                  <span className="text-sm text-amber-800">
+                    Bonusové body: {score.bonusPoints >= 0 ? "+" : ""}
+                    {score.bonusPoints} b.
+                  </span>
+                </div>
+              )}
             </div>
             <p className="text-xs text-slate-400">+3 body za každý včas zverejnený Reel, -3 body za každý, čo sa nestihol.</p>
           </CardContent>

@@ -11,18 +11,22 @@ const POINTS_PER_PUBLISHED = 3;
 const POINTS_PER_OVERDUE = 3;
 
 /**
- * Worker score: +3 per published Reel, -3 per Reel that missed its
- * deadline. Derived live from current task status (not a stored counter),
- * so it self-corrects if an admin later publishes an overdue task or
- * changes a task's status — no double-counting or manual reconciliation.
+ * Worker score: bonusPoints (a manually set starting balance/adjustment, set
+ * by an admin) + 3 per published Reel - 3 per Reel that missed its deadline.
+ * The task-derived part is computed live from current status (not a stored
+ * counter), so it self-corrects if an admin later publishes an overdue task
+ * — no double-counting or manual reconciliation.
  */
 export async function getUserPoints(userId: string) {
-  const [published, overdue] = await Promise.all([
+  const [user, published, overdue] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { bonusPoints: true } }),
     prisma.contentTask.count({ where: { assignedUserId: userId, status: "PUBLISHED" } }),
     prisma.contentTask.count({ where: { assignedUserId: userId, status: "OVERDUE" } }),
   ]);
+  const bonusPoints = user?.bonusPoints ?? 0;
   return {
-    points: published * POINTS_PER_PUBLISHED - overdue * POINTS_PER_OVERDUE,
+    points: bonusPoints + published * POINTS_PER_PUBLISHED - overdue * POINTS_PER_OVERDUE,
+    bonusPoints,
     published,
     overdue,
   };

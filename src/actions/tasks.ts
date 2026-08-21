@@ -117,6 +117,14 @@ export async function deleteTask(taskId: string): Promise<ActionResult> {
   return { ok: true, data: undefined };
 }
 
+/** Admin grants a one-off exception letting the worker self-publish this task even though it's overdue. */
+export async function allowLateSubmission(taskId: string): Promise<ActionResult> {
+  await requireAdmin();
+  await prisma.contentTask.update({ where: { id: taskId }, data: { lateSubmissionAllowed: true } });
+  revalidatePath(`/tasks/${taskId}`);
+  return { ok: true, data: undefined };
+}
+
 export async function cancelTask(taskId: string): Promise<ActionResult> {
   await requireAdmin();
   await prisma.contentTask.update({ where: { id: taskId }, data: { status: "CANCELLED" } });
@@ -135,7 +143,7 @@ export async function publishTask(taskId: string, formData: FormData): Promise<A
   if (user.role !== "ADMIN" && task.assignedUserId !== user.id) {
     return { ok: false, error: "Nemáte oprávnenie na túto úlohu" };
   }
-  if (user.role !== "ADMIN" && task.status === "OVERDUE") {
+  if (user.role !== "ADMIN" && task.status === "OVERDUE" && !task.lateSubmissionAllowed) {
     return { ok: false, error: "Termín uplynul, kontaktujte administrátora." };
   }
 

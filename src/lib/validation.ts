@@ -64,6 +64,7 @@ export const updateUserSchema = z.object({
   telegramChatId: z.string().max(100).optional().or(z.literal("")),
   active: z.boolean().optional(),
   password: z.string().min(6).optional().or(z.literal("")),
+  bonusPoints: z.coerce.number().int().optional(),
 });
 
 export const appSettingsSchema = z.object({

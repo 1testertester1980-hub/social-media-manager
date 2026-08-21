@@ -53,6 +53,7 @@ export async function updateUser(userId: string, formData: FormData): Promise<Ac
   if (d.role) data.role = d.role;
   if (d.telegramChatId !== undefined) data.telegramChatId = d.telegramChatId || null;
   if (d.active !== undefined) data.active = d.active;
+  if (d.bonusPoints !== undefined && !Number.isNaN(d.bonusPoints)) data.bonusPoints = d.bonusPoints;
   if (d.password) data.passwordHash = await bcrypt.hash(d.password, 10);
 
   await prisma.user.update({ where: { id: userId }, data });

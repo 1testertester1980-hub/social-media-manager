@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ExternalLink, Paperclip, Calendar as CalendarIcon, Clock, AlertTriangle } from "lucide-react";
+import { ExternalLink, Paperclip, Calendar as CalendarIcon, Clock, AlertTriangle, KeyRound } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { StatusBadge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { PublishForm } from "@/components/tasks/publish-form";
 import { TaskEditForm } from "@/components/tasks/task-edit-form";
 import { AnalyticsForm } from "@/components/tasks/analytics-form";
 import { DangerZone } from "@/components/tasks/danger-zone";
+import { AllowLateSubmissionButton } from "@/components/tasks/allow-late-submission-button";
 import { formatDate, formatTime, formatDateTime } from "@/lib/utils";
 
 export default async function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,8 +30,9 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
   const canPublish =
     task.status !== "PUBLISHED" &&
     task.status !== "CANCELLED" &&
-    (isAdmin || (isOwner && task.status !== "OVERDUE"));
-  const lockedForWorker = isOwner && !isAdmin && task.status === "OVERDUE";
+    (isAdmin || (isOwner && (task.status !== "OVERDUE" || task.lateSubmissionAllowed)));
+  const lockedForWorker =
+    isOwner && !isAdmin && task.status === "OVERDUE" && !task.lateSubmissionAllowed;
 
   const [profiles, workers] = isAdmin
     ? await Promise.all([
@@ -181,6 +183,31 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                 aby ju upravil alebo zverejnil za teba.
               </p>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isAdmin && task.status === "OVERDUE" && !task.lateSubmissionAllowed && (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-amber-900">Pracovník žiada o výnimku?</p>
+              <p className="mt-0.5 text-sm text-amber-700">
+                Povolíš mu, aby aj napriek uplynutému termínu mohol tento Reel sám označiť ako zverejnený.
+              </p>
+            </div>
+            <AllowLateSubmissionButton taskId={task.id} />
+          </CardContent>
+        </Card>
+      )}
+
+      {task.status === "OVERDUE" && task.lateSubmissionAllowed && (
+        <Card className="border-emerald-200 bg-emerald-50/50">
+          <CardContent className="flex items-start gap-3">
+            <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+            <p className="text-sm text-emerald-800">
+              Administrátor povolil neskoršie zverejnenie — Reel je stále možné označiť ako zverejnený.
+            </p>
           </CardContent>
         </Card>
       )}

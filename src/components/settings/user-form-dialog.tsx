@@ -26,6 +26,7 @@ type ExistingUser = {
   role: "ADMIN" | "WORKER";
   telegramChatId: string | null;
   active: boolean;
+  bonusPoints: number;
 };
 
 export function UserFormDialog({ mode = "create", user, trigger }: { mode?: "create" | "edit"; user?: ExistingUser; trigger?: React.ReactNode }) {
@@ -93,6 +94,15 @@ export function UserFormDialog({ mode = "create", user, trigger }: { mode?: "cre
                 <option value="true">Aktívny</option>
                 <option value="false">Neaktívny</option>
               </Select>
+            </Field>
+          )}
+          {mode === "edit" && user?.role === "WORKER" && (
+            <Field
+              label="Bonusové body"
+              htmlFor="bonusPoints"
+              hint="Pripočíta/odpočíta sa k bodom zo zverejnených/zameškaných Reelov"
+            >
+              <Input id="bonusPoints" name="bonusPoints" type="number" step={1} defaultValue={user?.bonusPoints ?? 0} />
             </Field>
           )}
           <div className="flex justify-end gap-3">

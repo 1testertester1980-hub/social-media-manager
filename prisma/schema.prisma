@@ -39,6 +39,7 @@ model User {
   role           Role     @default(WORKER)
   telegramChatId String?
   active         Boolean  @default(true)
+  bonusPoints    Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -78,6 +79,9 @@ model ContentTask {
 
   deadlineAt DateTime
   status     TaskStatus @default(PLANNED)
+
+  /** Admin-granted exception letting the worker self-publish this task even though it's OVERDUE. */
+  lateSubmissionAllowed Boolean @default(false)
 
   adminNotes    String?
   workerNotes   String?
