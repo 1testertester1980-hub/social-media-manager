@@ -20,8 +20,8 @@ export default async function UsersSettingsPage() {
         <UserFormDialog />
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-slate-100 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
               <th className="px-5 py-3">Meno</th>

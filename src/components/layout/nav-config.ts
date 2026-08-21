@@ -8,6 +8,7 @@ import {
   Settings,
   ListChecks,
   UserCircle,
+  ScrollText,
 } from "lucide-react";
 
 export const ADMIN_NAV = [
@@ -23,6 +24,7 @@ export const ADMIN_NAV = [
 export const WORKER_NAV = [
   { href: "/my-tasks", label: "Moje úlohy", icon: ListChecks },
   { href: "/calendar", label: "Kalendár", icon: Calendar },
+  { href: "/pravidla", label: "Pravidlá", icon: ScrollText },
   { href: "/notifications", label: "Notifikácie", icon: Bell },
   { href: "/account", label: "Profil", icon: UserCircle },
 ];

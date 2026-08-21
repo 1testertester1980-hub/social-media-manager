@@ -1,15 +1,20 @@
-import { Film, CheckCircle2, AlertTriangle, Percent, Eye, Users2, Heart, MessageCircle, Plus } from "lucide-react";
-import { getDashboardData } from "@/lib/queries";
+import { Film, CheckCircle2, AlertTriangle, Percent, Eye, Users2, Heart, MessageCircle, Plus, Trophy } from "lucide-react";
+import { getDashboardData, getAllWorkerPoints } from "@/lib/queries";
+import { prisma } from "@/lib/prisma";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { TaskCard } from "@/components/tasks/task-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ProfilePerformanceChart } from "@/components/dashboard/profile-performance-chart";
-import { formatNumber, formatPercent } from "@/lib/utils";
+import { formatNumber, formatPercent, cn } from "@/lib/utils";
 
 export default async function DashboardPage() {
-  const { kpis, todayTasks, overdueTasks, profilePerformance } = await getDashboardData();
+  const [{ kpis, todayTasks, overdueTasks, profilePerformance }, workers, pointsByUser] = await Promise.all([
+    getDashboardData(),
+    prisma.user.findMany({ where: { role: "WORKER" }, orderBy: { name: "asc" } }),
+    getAllWorkerPoints(),
+  ]);
 
   const chartData = profilePerformance.map((p) => ({
     name: p.profile.name,
@@ -70,14 +75,48 @@ export default async function DashboardPage() {
           </Card>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Zhliadnutia podľa profilu</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ProfilePerformanceChart data={chartData} />
-          </CardContent>
-        </Card>
+        <div className="flex flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Zhliadnutia podľa profilu</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ProfilePerformanceChart data={chartData} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-amber-500" />
+                <CardTitle>Body pracovníkov</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {workers.length === 0 ? (
+                <EmptyState icon={Trophy} title="Zatiaľ žiadni pracovníci" />
+              ) : (
+                workers.map((w) => {
+                  const score = pointsByUser.get(w.id);
+                  return (
+                    <div key={w.id} className="flex items-center justify-between">
+                      <span className="text-sm text-slate-700">{w.name}</span>
+                      <span
+                        className={cn(
+                          "text-lg font-bold",
+                          (score?.points ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"
+                        )}
+                      >
+                        {(score?.points ?? 0) >= 0 ? "+" : ""}
+                        {score?.points ?? 0}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
