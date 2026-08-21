@@ -131,6 +131,9 @@ export async function publishTask(taskId: string, formData: FormData): Promise<A
   if (user.role !== "ADMIN" && task.assignedUserId !== user.id) {
     return { ok: false, error: "Nemáte oprávnenie na túto úlohu" };
   }
+  if (user.role !== "ADMIN" && task.status === "OVERDUE") {
+    return { ok: false, error: "Termín uplynul, kontaktujte administrátora." };
+  }
 
   const raw = Object.fromEntries(formData.entries());
   const parsed = publishTaskSchema.safeParse(raw);

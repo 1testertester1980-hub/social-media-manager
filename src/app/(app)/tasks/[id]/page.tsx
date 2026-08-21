@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ExternalLink, Paperclip, Calendar as CalendarIcon, Clock } from "lucide-react";
+import { ExternalLink, Paperclip, Calendar as CalendarIcon, Clock, AlertTriangle } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { StatusBadge } from "@/components/ui/badge";
@@ -26,7 +26,11 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
   const isOwner = task.assignedUserId === user.id;
   if (!isAdmin && !isOwner) notFound();
 
-  const canPublish = (isAdmin || isOwner) && task.status !== "PUBLISHED" && task.status !== "CANCELLED";
+  const canPublish =
+    task.status !== "PUBLISHED" &&
+    task.status !== "CANCELLED" &&
+    (isAdmin || (isOwner && task.status !== "OVERDUE"));
+  const lockedForWorker = isOwner && !isAdmin && task.status === "OVERDUE";
 
   const [profiles, workers] = isAdmin
     ? await Promise.all([
@@ -162,6 +166,21 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
             {task.workerNotes && (
               <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">{task.workerNotes}</p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {lockedForWorker && (
+        <Card className="border-red-200 bg-red-50/50">
+          <CardContent className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+            <div>
+              <p className="text-sm font-semibold text-red-900">Termín uplynul</p>
+              <p className="mt-0.5 text-sm text-red-700">
+                Túto úlohu už nie je možné označiť ako zverejnenú. Kontaktuj administrátora,
+                aby ju upravil alebo zverejnil za teba.
+              </p>
+            </div>
           </CardContent>
         </Card>
       )}
