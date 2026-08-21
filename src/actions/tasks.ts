@@ -10,14 +10,18 @@ import {
   analyticsSchema,
 } from "@/lib/validation";
 import { notifyTaskAssigned, notifyTaskPublished } from "@/lib/notify";
+import { zonedTimeToUtc } from "@/lib/utils";
 
 export type ActionResult<T = undefined> =
   | { ok: true; data: T }
   | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
 
 function combineDeadline(date: string, time: string) {
-  // Interpreted in server local time; the app targets Europe/Bratislava deployments.
-  return new Date(`${date}T${time}:00`);
+  // date: "YYYY-MM-DD", time: "HH:MM" — always interpreted as Europe/Bratislava
+  // local time, regardless of the server's own timezone (Vercel runs UTC).
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+  return zonedTimeToUtc(year, month, day, hour, minute);
 }
 
 export async function createTask(formData: FormData): Promise<ActionResult<{ id: string }>> {

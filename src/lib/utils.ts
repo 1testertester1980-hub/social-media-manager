@@ -47,6 +47,51 @@ export function formatTime(date: Date | string) {
   }).format(d);
 }
 
+/**
+ * Converts a civil (wall-clock) date/time in the given timezone to the
+ * correct UTC instant — regardless of what timezone the server itself runs
+ * in (Vercel runs UTC). Handles DST correctly by reading the real offset for
+ * that specific date via Intl.
+ */
+export function zonedTimeToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  timeZone: string = TZ
+): Date {
+  const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })
+    .formatToParts(utcGuess)
+    .reduce<Record<string, string>>((acc, p) => {
+      if (p.type !== "literal") acc[p.type] = p.value;
+      return acc;
+    }, {});
+
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour) % 24,
+    Number(parts.minute),
+    Number(parts.second)
+  );
+
+  const offset = asUtc - utcGuess.getTime();
+  return new Date(utcGuess.getTime() - offset);
+}
+
 /** yyyy-MM-dd key for the given instant as seen in the app timezone. */
 export function tzDayKey(date: Date | string) {
   const d = typeof date === "string" ? new Date(date) : date;
