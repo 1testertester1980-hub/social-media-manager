@@ -1,0 +1,139 @@
+// Social Media Manager - Prisma schema
+// Postgres relational schema for tasks, profiles, users, analytics and notifications.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  WORKER
+}
+
+enum TaskStatus {
+  PLANNED
+  TODO
+  PUBLISHED
+  OVERDUE
+  CANCELLED
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_OVERDUE
+  TASK_PUBLISHED
+  SYSTEM
+}
+
+model User {
+  id             String   @id @default(cuid())
+  name           String
+  email          String   @unique
+  passwordHash   String
+  role           Role     @default(WORKER)
+  telegramChatId String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  assignedTasks ContentTask[]  @relation("AssignedTasks")
+  notifications Notification[]
+
+  @@index([role])
+}
+
+model Profile {
+  id                 String   @id @default(cuid())
+  name               String
+  instagramUsername  String?
+  imageUrl           String?
+  color              String   @default("#6366f1")
+  notes              String?
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  tasks ContentTask[]
+
+  @@index([active])
+}
+
+model ContentTask {
+  id             String     @id @default(cuid())
+  profileId      String
+  profile        Profile    @relation(fields: [profileId], references: [id], onDelete: Restrict)
+  assignedUserId String?
+  assignedUser   User?      @relation("AssignedTasks", fields: [assignedUserId], references: [id], onDelete: SetNull)
+
+  title   String
+  topic   String?
+  brief   String?
+  caption String?
+
+  deadlineAt DateTime
+  status     TaskStatus @default(PLANNED)
+
+  adminNotes    String?
+  workerNotes   String?
+  attachmentUrl String?
+  instagramUrl  String?
+
+  publishedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  analytics Analytics?
+
+  @@index([deadlineAt])
+  @@index([status])
+  @@index([profileId])
+  @@index([assignedUserId])
+  @@index([createdAt])
+}
+
+model Analytics {
+  id     String      @id @default(cuid())
+  taskId String      @unique
+  task   ContentTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  views           Int @default(0)
+  reach           Int @default(0)
+  likes           Int @default(0)
+  comments        Int @default(0)
+  shares          Int @default(0)
+  saves           Int @default(0)
+  followersGained Int @default(0)
+
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    NotificationType
+  title   String
+  message String
+  taskId  String?
+  read    Boolean          @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+model AppSettings {
+  id               String   @id @default("singleton")
+  telegramBotToken String?
+  timezone         String   @default("Europe/Bratislava")
+  updatedAt        DateTime @updatedAt
+}
