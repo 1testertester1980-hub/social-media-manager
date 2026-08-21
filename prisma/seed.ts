@@ -57,7 +57,7 @@ async function main() {
     where: { email: "worker@smm.local" },
     update: {},
     create: {
-      name: "Peter Pracovník",
+      name: "Marko Pracovník",
       email: "worker@smm.local",
       passwordHash: workerPasswordHash,
       role: "WORKER",
