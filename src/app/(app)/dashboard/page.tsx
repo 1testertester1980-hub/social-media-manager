@@ -7,10 +7,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ProfilePerformanceChart } from "@/components/dashboard/profile-performance-chart";
-import { formatNumber, formatPercent, cn } from "@/lib/utils";
+import { ResetOverdueButton } from "@/components/dashboard/reset-overdue-button";
+import { formatNumber, formatPercent, formatDateTime, cn } from "@/lib/utils";
 
 export default async function DashboardPage() {
-  const [{ kpis, todayTasks, overdueTasks, profilePerformance }, workers, pointsByUser] = await Promise.all([
+  const [{ kpis, todayTasks, overdueTasks, profilePerformance, overdueStatsResetAt }, workers, pointsByUser] = await Promise.all([
     getDashboardData(),
     prisma.user.findMany({ where: { role: "WORKER" }, orderBy: { name: "asc" } }),
     getAllWorkerPoints(),
@@ -21,6 +22,8 @@ export default async function DashboardPage() {
     views: p.views,
     color: p.profile.color,
   }));
+
+  const totalPoints = Array.from(pointsByUser.values()).reduce((sum, s) => sum + s.points, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -44,6 +47,12 @@ export default async function DashboardPage() {
         <KpiCard label="Dosah" value={formatNumber(kpis.reach)} icon={Users2} />
         <KpiCard label="Páči sa mi to" value={formatNumber(kpis.likes)} icon={Heart} />
         <KpiCard label="Komentáre" value={formatNumber(kpis.comments)} icon={MessageCircle} />
+        <KpiCard
+          label="Celkové body pracovníkov"
+          value={`${totalPoints >= 0 ? "+" : ""}${totalPoints}`}
+          icon={Trophy}
+          tone={totalPoints >= 0 ? "success" : "danger"}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -62,10 +71,16 @@ export default async function DashboardPage() {
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Po termíne</CardTitle>
+              <ResetOverdueButton />
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
+              {overdueStatsResetAt && (
+                <p className="mb-1 text-xs text-slate-400">
+                  Zobrazené od posledného resetu: {formatDateTime(overdueStatsResetAt)}
+                </p>
+              )}
               {overdueTasks.length === 0 ? (
                 <EmptyState icon={CheckCircle2} title="Žiadne úlohy po termíne" description="Skvelá práca!" />
               ) : (

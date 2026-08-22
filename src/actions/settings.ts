@@ -13,9 +13,28 @@ export async function getAppSettings() {
       id: "singleton",
       telegramBotToken: null,
       timezone: "Europe/Bratislava",
+      overdueStatsResetAt: null,
       updatedAt: new Date(),
     }
   );
+}
+
+/**
+ * Resets the dashboard's "Po termíne" count/list to zero from this moment
+ * on. Doesn't touch the underlying tasks — they stay OVERDUE, workers still
+ * see them, and they still count toward points. Purely a display watermark.
+ */
+export async function resetOverdueStats(): Promise<ActionResult> {
+  await requireAdmin();
+
+  await prisma.appSettings.upsert({
+    where: { id: "singleton" },
+    create: { id: "singleton", overdueStatsResetAt: new Date() },
+    update: { overdueStatsResetAt: new Date() },
+  });
+
+  revalidatePath("/dashboard");
+  return { ok: true, data: undefined };
 }
 
 export async function updateAppSettings(formData: FormData): Promise<ActionResult> {

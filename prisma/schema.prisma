@@ -139,5 +139,9 @@ model AppSettings {
   id               String   @id @default("singleton")
   telegramBotToken String?
   timezone         String   @default("Europe/Bratislava")
-  updatedAt        DateTime @updatedAt
+
+  /** Dashboard "Po termíne" only counts overdue tasks whose deadline is after this point; underlying tasks are untouched. */
+  overdueStatsResetAt DateTime?
+
+  updatedAt DateTime @updatedAt
 }

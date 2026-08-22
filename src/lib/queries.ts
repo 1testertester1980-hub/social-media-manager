@@ -45,6 +45,9 @@ export async function getDashboardData() {
   const now = new Date();
   const { start, end } = monthRange(now.getFullYear(), now.getMonth() + 1);
 
+  const settings = await prisma.appSettings.findUnique({ where: { id: "singleton" } });
+  const overdueStatsResetAt = settings?.overdueStatsResetAt ?? null;
+
   const [tasksThisMonth, todayTasks, overdueTasks, profiles] = await Promise.all([
     prisma.contentTask.findMany({
       where: { deadlineAt: { gte: start, lt: end } },
@@ -59,7 +62,10 @@ export async function getDashboardData() {
       orderBy: { deadlineAt: "asc" },
     }),
     prisma.contentTask.findMany({
-      where: { status: "OVERDUE" },
+      where: {
+        status: "OVERDUE",
+        ...(overdueStatsResetAt ? { deadlineAt: { gte: overdueStatsResetAt } } : {}),
+      },
       include: { profile: true, assignedUser: true },
       orderBy: { deadlineAt: "asc" },
       take: 10,
@@ -69,7 +75,9 @@ export async function getDashboardData() {
 
   const planned = tasksThisMonth.length;
   const published = tasksThisMonth.filter((t) => t.status === "PUBLISHED").length;
-  const overdue = tasksThisMonth.filter((t) => t.status === "OVERDUE").length;
+  const overdue = tasksThisMonth.filter(
+    (t) => t.status === "OVERDUE" && (!overdueStatsResetAt || t.deadlineAt >= overdueStatsResetAt)
+  ).length;
   const completionRate = planned > 0 ? (published / planned) * 100 : 0;
 
   const totals = tasksThisMonth.reduce(
@@ -95,6 +103,7 @@ export async function getDashboardData() {
     todayTasks,
     overdueTasks,
     profilePerformance,
+    overdueStatsResetAt,
   };
 }
 
