@@ -43,10 +43,23 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  assignedTasks ContentTask[]  @relation("AssignedTasks")
-  notifications Notification[]
+  assignedTasks     ContentTask[]      @relation("AssignedTasks")
+  notifications     Notification[]
+  pointsAdjustments PointsAdjustment[]
 
   @@index([role])
+}
+
+/** A single admin-issued points penalty/bonus with a reason, kept as a log (not overwritten). */
+model PointsAdjustment {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Profile {

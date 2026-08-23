@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { Trophy, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Trophy, CheckCircle2, AlertTriangle, MinusCircle } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { getUserPoints } from "@/lib/queries";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { AccountForm } from "@/components/account/account-form";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 
 export default async function AccountPage() {
   const sessionUser = await getSessionUser();
@@ -65,6 +65,28 @@ export default async function AccountPage() {
               )}
             </div>
             <p className="text-xs text-slate-400">+3 body za každý včas zverejnený Reel, -3 body za každý, čo sa nestihol.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {score && score.adjustments.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <MinusCircle className="h-4 w-4 text-red-500" />
+              <CardTitle>Penalizácie</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {score.adjustments.map((a) => (
+              <div key={a.id} className="rounded-lg bg-red-50 px-3 py-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-red-700">{a.amount} b.</span>
+                  <span className="text-xs text-slate-400">{formatDateTime(a.createdAt)}</span>
+                </div>
+                <p className="mt-0.5 text-slate-600">{a.reason}</p>
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}

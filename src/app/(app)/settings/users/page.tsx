@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAllWorkerPoints } from "@/lib/queries";
 import { UserFormDialog } from "@/components/settings/user-form-dialog";
+import { PenaltyDialog } from "@/components/settings/penalty-dialog";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +22,7 @@ export default async function UsersSettingsPage() {
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className="w-full min-w-[800px] text-sm">
           <thead>
             <tr className="border-b border-slate-100 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
               <th className="px-5 py-3">Meno</th>
@@ -29,6 +30,7 @@ export default async function UsersSettingsPage() {
               <th className="px-5 py-3">Rola</th>
               <th className="px-5 py-3">Stav</th>
               <th className="px-5 py-3 text-right">Body</th>
+              <th className="px-5 py-3 text-right">Penalizácie</th>
               <th className="px-5 py-3" />
             </tr>
           </thead>
@@ -64,15 +66,32 @@ export default async function UsersSettingsPage() {
                     )}
                   </td>
                   <td className="px-5 py-3 text-right">
-                    <UserFormDialog
-                      mode="edit"
-                      user={u}
-                      trigger={
-                        <button className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">
-                          Upraviť
-                        </button>
-                      }
-                    />
+                    {score && score.adjustmentTotal !== 0 ? (
+                      <span
+                        className="font-semibold text-red-600"
+                        title={score.adjustments.map((a) => `${a.amount} b. — ${a.reason}`).join("\n")}
+                      >
+                        {score.adjustmentTotal}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">0</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex justify-end gap-2">
+                      {u.role === "WORKER" && (
+                        <PenaltyDialog userId={u.id} userName={u.name} history={score?.adjustments ?? []} />
+                      )}
+                      <UserFormDialog
+                        mode="edit"
+                        user={u}
+                        trigger={
+                          <button className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">
+                            Upraviť
+                          </button>
+                        }
+                      />
+                    </div>
                   </td>
                 </tr>
               );

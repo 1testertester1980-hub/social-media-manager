@@ -67,6 +67,11 @@ export const updateUserSchema = z.object({
   bonusPoints: z.coerce.number().int().optional(),
 });
 
+export const pointsPenaltySchema = z.object({
+  amount: z.coerce.number().int().refine((v) => [-1, -2, -3].includes(v), "Vyberte -1, -2 alebo -3"),
+  reason: z.string().min(3, "Zadajte dôvod (aspoň 3 znaky)").max(300),
+});
+
 export const appSettingsSchema = z.object({
   telegramBotToken: z.string().max(300).optional().or(z.literal("")),
   timezone: z.string().min(1).default("Europe/Bratislava"),
