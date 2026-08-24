@@ -1,5 +1,5 @@
 import { Film, CheckCircle2, AlertTriangle, Percent, Eye, Users2, Heart, MessageCircle, Plus, Trophy } from "lucide-react";
-import { getDashboardData, getAllWorkerPoints } from "@/lib/queries";
+import { getDashboardData, getAllWorkerPoints, getPendingBonusRequests } from "@/lib/queries";
 import { prisma } from "@/lib/prisma";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { TaskCard } from "@/components/tasks/task-card";
@@ -8,14 +8,17 @@ import { ButtonLink } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ProfilePerformanceChart } from "@/components/dashboard/profile-performance-chart";
 import { ResetOverdueButton } from "@/components/dashboard/reset-overdue-button";
+import { PendingBonusRequestsCard } from "@/components/dashboard/pending-bonus-requests-card";
 import { formatNumber, formatPercent, formatDateTime, cn } from "@/lib/utils";
 
 export default async function DashboardPage() {
-  const [{ kpis, todayTasks, overdueTasks, profilePerformance, overdueStatsResetAt }, workers, pointsByUser] = await Promise.all([
-    getDashboardData(),
-    prisma.user.findMany({ where: { role: "WORKER" }, orderBy: { name: "asc" } }),
-    getAllWorkerPoints(),
-  ]);
+  const [{ kpis, todayTasks, overdueTasks, profilePerformance, overdueStatsResetAt }, workers, pointsByUser, pendingBonusRequests] =
+    await Promise.all([
+      getDashboardData(),
+      prisma.user.findMany({ where: { role: "WORKER" }, orderBy: { name: "asc" } }),
+      getAllWorkerPoints(),
+      getPendingBonusRequests(),
+    ]);
 
   const chartData = profilePerformance.map((p) => ({
     name: p.profile.name,
@@ -37,6 +40,8 @@ export default async function DashboardPage() {
           Nový Reel
         </ButtonLink>
       </div>
+
+      <PendingBonusRequestsCard requests={pendingBonusRequests} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Naplánované tento mesiac" value={String(kpis.planned)} icon={Film} />

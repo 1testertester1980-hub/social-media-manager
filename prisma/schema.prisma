@@ -51,15 +51,28 @@ model User {
 }
 
 /** A single admin-issued points penalty/bonus with a reason, kept as a log (not overwritten). */
+enum AdjustmentStatus {
+  APPROVED
+  PENDING
+  REJECTED
+}
+
 model PointsAdjustment {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount    Int
-  reason    String
-  createdAt DateTime @default(now())
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount Int
+  reason String
+
+  /** True when the worker requested this themselves (extra-effort bonus); false for admin-issued penalties, which are always pre-decided. */
+  requestedByWorker Boolean          @default(false)
+  status            AdjustmentStatus @default(APPROVED)
+
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
 
   @@index([userId])
+  @@index([status])
 }
 
 model Profile {

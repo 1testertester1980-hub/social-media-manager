@@ -3,8 +3,9 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/session";
-import { createUserSchema, updateUserSchema, pointsPenaltySchema } from "@/lib/validation";
+import { requireAdmin, requireUser } from "@/lib/session";
+import { createUserSchema, updateUserSchema, pointsPenaltySchema, bonusRequestSchema } from "@/lib/validation";
+import { getTodaysBonusRequest } from "@/lib/queries";
 import type { ActionResult } from "@/actions/tasks";
 
 export async function createUser(formData: FormData): Promise<ActionResult<{ id: string }>> {
@@ -86,5 +87,91 @@ export async function addPointsPenalty(userId: string, formData: FormData): Prom
   revalidatePath("/settings/users");
   revalidatePath("/account");
   revalidatePath("/dashboard");
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Worker asks for 1-5 bonus points for extra effort that day (great Reel,
+ * strong views, going the extra mile...). Doesn't touch their score until
+ * an admin approves it. Limited to one request per calendar day.
+ */
+export async function requestBonusPoints(formData: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  if (user.role !== "WORKER") {
+    return { ok: false, error: "Táto funkcia je len pre pracovníkov" };
+  }
+
+  const already = await getTodaysBonusRequest(user.id);
+  if (already) {
+    return { ok: false, error: "Dnes si už žiadosť o body odoslal." };
+  }
+
+  const raw = Object.fromEntries(formData.entries());
+  const parsed = bonusRequestSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: "Neplatné údaje", fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+  const { amount, note } = parsed.data;
+
+  await prisma.pointsAdjustment.create({
+    data: {
+      userId: user.id,
+      amount,
+      reason: note || "Žiadosť o bonusové body za extra snahu",
+      requestedByWorker: true,
+      status: "PENDING",
+    },
+  });
+
+  const admins = await prisma.user.findMany({ where: { role: "ADMIN", active: true } });
+  for (const admin of admins) {
+    await prisma.notification.create({
+      data: {
+        userId: admin.id,
+        type: "SYSTEM",
+        title: "Žiadosť o bonusové body",
+        message: `${user.name} žiada o +${amount} b.${note ? ` — ${note}` : ""}`,
+      },
+    });
+  }
+
+  revalidatePath("/my-tasks");
+  revalidatePath("/dashboard");
+  return { ok: true, data: undefined };
+}
+
+/** Admin approves or rejects a worker's bonus-points request. */
+export async function decideBonusRequest(
+  adjustmentId: string,
+  decision: "APPROVE" | "REJECT"
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  const adjustment = await prisma.pointsAdjustment.findUnique({ where: { id: adjustmentId } });
+  if (!adjustment || !adjustment.requestedByWorker || adjustment.status !== "PENDING") {
+    return { ok: false, error: "Žiadosť už bola vybavená" };
+  }
+
+  await prisma.pointsAdjustment.update({
+    where: { id: adjustmentId },
+    data: { status: decision === "APPROVE" ? "APPROVED" : "REJECTED", decidedAt: new Date() },
+  });
+
+  await prisma.notification.create({
+    data: {
+      userId: adjustment.userId,
+      type: "SYSTEM",
+      title: decision === "APPROVE" ? "Bonusové body schválené" : "Žiadosť o body zamietnutá",
+      message:
+        decision === "APPROVE"
+          ? `Admin ti schválil +${adjustment.amount} b.`
+          : `Admin zamietol tvoju žiadosť o +${adjustment.amount} b.`,
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/my-tasks");
+  revalidatePath("/account");
+  revalidatePath("/settings/users");
   return { ok: true, data: undefined };
 }

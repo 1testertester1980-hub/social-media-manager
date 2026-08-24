@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { zonedTimeToUtc, tzDayKey } from "@/lib/utils";
 
 export function monthRange(year: number, month: number) {
   const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
@@ -13,10 +14,11 @@ const POINTS_PER_OVERDUE = 3;
 /**
  * Worker score: bonusPoints (a manually set starting balance, set by an
  * admin) + 3 per published Reel - 3 per Reel that missed its deadline, plus
- * the sum of any admin-issued penalty/adjustment entries (each with its own
- * reason, kept as a log — never overwritten). The task-derived part is
- * computed live from current status (not a stored counter), so it
- * self-corrects if an admin later publishes an overdue task.
+ * the sum of APPROVED adjustment entries (admin penalties, always
+ * pre-approved; worker bonus requests only count once an admin approves
+ * them). The task-derived part is computed live from current status (not a
+ * stored counter), so it self-corrects if an admin later publishes an
+ * overdue task.
  */
 export async function getUserPoints(userId: string) {
   const [user, published, overdue, adjustments] = await Promise.all([
@@ -26,7 +28,8 @@ export async function getUserPoints(userId: string) {
     prisma.pointsAdjustment.findMany({ where: { userId }, orderBy: { createdAt: "desc" } }),
   ]);
   const bonusPoints = user?.bonusPoints ?? 0;
-  const adjustmentTotal = adjustments.reduce((sum, a) => sum + a.amount, 0);
+  const approved = adjustments.filter((a) => a.status === "APPROVED");
+  const adjustmentTotal = approved.reduce((sum, a) => sum + a.amount, 0);
   return {
     points: bonusPoints + published * POINTS_PER_PUBLISHED - overdue * POINTS_PER_OVERDUE + adjustmentTotal,
     bonusPoints,
@@ -44,6 +47,31 @@ export async function getAllWorkerPoints() {
     workers.map(async (w) => [w.id, await getUserPoints(w.id)] as const)
   );
   return new Map(entries);
+}
+
+function todayRangeBratislava() {
+  const [year, month, day] = tzDayKey(new Date()).split("-").map(Number);
+  const start = zonedTimeToUtc(year, month, day, 0, 0);
+  const end = new Date(start.getTime() + 86400000);
+  return { start, end };
+}
+
+/** The worker's own bonus-effort request for today, if they already submitted one. */
+export async function getTodaysBonusRequest(userId: string) {
+  const { start, end } = todayRangeBratislava();
+  return prisma.pointsAdjustment.findFirst({
+    where: { userId, requestedByWorker: true, createdAt: { gte: start, lt: end } },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+/** All pending worker bonus requests, for the admin dashboard. */
+export async function getPendingBonusRequests() {
+  return prisma.pointsAdjustment.findMany({
+    where: { requestedByWorker: true, status: "PENDING" },
+    include: { user: { select: { id: true, name: true } } },
+    orderBy: { createdAt: "asc" },
+  });
 }
 
 export async function getDashboardData() {
