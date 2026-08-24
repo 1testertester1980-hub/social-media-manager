@@ -10,7 +10,7 @@ const ADMIN_ONLY_PREFIXES = [
   "/settings",
 ];
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/"];
 
 export default auth((req) => {
   const { nextUrl } = req;
