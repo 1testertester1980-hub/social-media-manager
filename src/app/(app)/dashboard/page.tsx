@@ -1,5 +1,11 @@
-import { Film, CheckCircle2, AlertTriangle, Percent, Eye, Users2, Heart, MessageCircle, Plus, Trophy } from "lucide-react";
-import { getDashboardData, getAllWorkerPoints, getPendingBonusRequests } from "@/lib/queries";
+import { Film, CheckCircle2, AlertTriangle, Percent, Eye, Users2, Heart, MessageCircle, Plus, Trophy, Gem } from "lucide-react";
+import {
+  getDashboardData,
+  getAllWorkerPoints,
+  getPendingBonusRequests,
+  getAllWorkerQualityPoints,
+  getPendingQualityRequests,
+} from "@/lib/queries";
 import { prisma } from "@/lib/prisma";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { TaskCard } from "@/components/tasks/task-card";
@@ -9,16 +15,25 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ProfilePerformanceChart } from "@/components/dashboard/profile-performance-chart";
 import { ResetOverdueButton } from "@/components/dashboard/reset-overdue-button";
 import { PendingBonusRequestsCard } from "@/components/dashboard/pending-bonus-requests-card";
+import { PendingQualityRequestsCard } from "@/components/dashboard/pending-quality-requests-card";
 import { formatNumber, formatPercent, formatDateTime, cn } from "@/lib/utils";
 
 export default async function DashboardPage() {
-  const [{ kpis, todayTasks, overdueTasks, profilePerformance, overdueStatsResetAt }, workers, pointsByUser, pendingBonusRequests] =
-    await Promise.all([
-      getDashboardData(),
-      prisma.user.findMany({ where: { role: "WORKER" }, orderBy: { name: "asc" } }),
-      getAllWorkerPoints(),
-      getPendingBonusRequests(),
-    ]);
+  const [
+    { kpis, todayTasks, overdueTasks, profilePerformance, overdueStatsResetAt },
+    workers,
+    pointsByUser,
+    pendingBonusRequests,
+    qualityPointsByUser,
+    pendingQualityRequests,
+  ] = await Promise.all([
+    getDashboardData(),
+    prisma.user.findMany({ where: { role: "WORKER" }, orderBy: { name: "asc" } }),
+    getAllWorkerPoints(),
+    getPendingBonusRequests(),
+    getAllWorkerQualityPoints(),
+    getPendingQualityRequests(),
+  ]);
 
   const chartData = profilePerformance.map((p) => ({
     name: p.profile.name,
@@ -27,6 +42,7 @@ export default async function DashboardPage() {
   }));
 
   const totalPoints = Array.from(pointsByUser.values()).reduce((sum, s) => sum + s.points, 0);
+  const totalQualityPoints = Array.from(qualityPointsByUser.values()).reduce((sum, s) => sum + s.points, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -42,6 +58,7 @@ export default async function DashboardPage() {
       </div>
 
       <PendingBonusRequestsCard requests={pendingBonusRequests} />
+      <PendingQualityRequestsCard requests={pendingQualityRequests} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Naplánované tento mesiac" value={String(kpis.planned)} icon={Film} />
@@ -58,6 +75,7 @@ export default async function DashboardPage() {
           icon={Trophy}
           tone={totalPoints >= 0 ? "success" : "danger"}
         />
+        <KpiCard label="Pupio kvalita body" value={String(totalQualityPoints)} icon={Gem} tone="success" />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -130,6 +148,30 @@ export default async function DashboardPage() {
                         {(score?.points ?? 0) >= 0 ? "+" : ""}
                         {score?.points ?? 0}
                       </span>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-purple-200">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Gem className="h-4 w-4 text-purple-500" />
+                <CardTitle>Pupio kvalita</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {workers.length === 0 ? (
+                <EmptyState icon={Gem} title="Zatiaľ žiadni pracovníci" />
+              ) : (
+                workers.map((w) => {
+                  const score = qualityPointsByUser.get(w.id);
+                  return (
+                    <div key={w.id} className="flex items-center justify-between">
+                      <span className="text-sm text-slate-700">{w.name}</span>
+                      <span className="text-lg font-bold text-purple-600">{score?.points ?? 0}</span>
                     </div>
                   );
                 })

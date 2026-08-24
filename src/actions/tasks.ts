@@ -7,6 +7,7 @@ import {
   createTaskSchema,
   updateTaskSchema,
   publishTaskSchema,
+  qualityPublishExtraSchema,
   analyticsSchema,
 } from "@/lib/validation";
 import { notifyTaskAssigned, notifyTaskPublished } from "@/lib/notify";
@@ -138,7 +139,7 @@ export async function cancelTask(taskId: string): Promise<ActionResult> {
 export async function publishTask(taskId: string, formData: FormData): Promise<ActionResult> {
   const user = await requireUser();
 
-  const task = await prisma.contentTask.findUnique({ where: { id: taskId } });
+  const task = await prisma.contentTask.findUnique({ where: { id: taskId }, include: { profile: true } });
   if (!task) return { ok: false, error: "Úloha neexistuje" };
   if (user.role !== "ADMIN" && task.assignedUserId !== user.id) {
     return { ok: false, error: "Nemáte oprávnenie na túto úlohu" };
@@ -153,6 +154,15 @@ export async function publishTask(taskId: string, formData: FormData): Promise<A
     return { ok: false, error: "Neplatné údaje", fieldErrors: parsed.error.flatten().fieldErrors };
   }
   const d = parsed.data;
+
+  let qualityRequest: { prepMinutes: number; requestedPoints: number } | null = null;
+  if (task.profile.qualityTracked) {
+    const qualityParsed = qualityPublishExtraSchema.safeParse(raw);
+    if (!qualityParsed.success) {
+      return { ok: false, error: "Zadajte čas prípravy a počet bodov", fieldErrors: qualityParsed.error.flatten().fieldErrors };
+    }
+    qualityRequest = qualityParsed.data;
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.contentTask.update({
@@ -183,9 +193,38 @@ export async function publishTask(taskId: string, formData: FormData): Promise<A
         },
       });
     }
+
+    if (qualityRequest && task.assignedUserId) {
+      await tx.pointsAdjustment.create({
+        data: {
+          userId: task.assignedUserId,
+          taskId: task.id,
+          amount: qualityRequest.requestedPoints,
+          prepMinutes: qualityRequest.prepMinutes,
+          reason: `${task.title} — ${qualityRequest.prepMinutes} min príprava`,
+          requestedByWorker: true,
+          status: "PENDING",
+          category: "PUPIO_QUALITY",
+        },
+      });
+    }
   });
 
   await notifyTaskPublished(taskId);
+
+  if (qualityRequest) {
+    const admins = await prisma.user.findMany({ where: { role: "ADMIN", active: true } });
+    for (const admin of admins) {
+      await prisma.notification.create({
+        data: {
+          userId: admin.id,
+          type: "SYSTEM",
+          title: "Nová žiadosť o kvalitné body (Pupio)",
+          message: `${task.title} — ${qualityRequest.prepMinutes} min, žiada +${qualityRequest.requestedPoints} b.`,
+        },
+      });
+    }
+  }
 
   revalidatePath("/dashboard");
   revalidatePath("/content");

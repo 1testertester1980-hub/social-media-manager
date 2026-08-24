@@ -34,14 +34,18 @@ function todayYmd() {
 }
 
 /**
- * Creates rotation tasks (2 profiles/day) for today through the next
- * HORIZON_DAYS days, for the single active worker, wherever they don't
- * already exist. Idempotent per profile/worker/day — safe to call
- * repeatedly (uses two bulk reads, not one query per day). Deadlines are
- * always 20:00 Europe/Bratislava time, correctly converted regardless of the
- * server's own timezone. Called on every page load and from the daily cron,
- * so the calendar always shows a rolling two-week preview of upcoming
- * assignments.
+ * Creates the daily task load for the single active worker, for today
+ * through the next HORIZON_DAYS days, wherever it doesn't already exist.
+ * Idempotent — safe to call repeatedly (bulk reads, not one query per
+ * day/profile). Deadlines are always 20:00 Europe/Bratislava time, correctly
+ * converted regardless of the server's own timezone. Called on every page
+ * load and from the daily cron.
+ *
+ * Two independent schedules run side by side:
+ * - WEEKDAY_ROTATION: 2 profiles/day, varying by weekday (the original 5
+ *   profiles).
+ * - Fixed-count profiles (Profile.dailyReelCount > 0, e.g. Pupio): exactly N
+ *   Reels every single day, regardless of weekday.
  */
 export async function generateDailyTasks() {
   const { year, month, day } = todayYmd();
@@ -54,6 +58,7 @@ export async function generateDailyTasks() {
 
   const profiles = await prisma.profile.findMany({ where: { active: true } });
   const profileById = new Map(profiles.map((p) => [p.id, p]));
+  const fixedCountProfiles = profiles.filter((p) => p.dailyReelCount > 0);
 
   // Precompute each day's Y/M/D, weekday and deadline via pure calendar
   // arithmetic (no timezone ambiguity) anchored on "today" in Bratislava.
@@ -78,14 +83,18 @@ export async function generateDailyTasks() {
     select: { profileId: true, deadlineAt: true },
   });
   const existingKeys = new Set(existingTasks.map((t) => `${t.profileId}|${tzDayKey(t.deadlineAt)}`));
+  const existingCounts = new Map<string, number>();
+  for (const t of existingTasks) {
+    const key = `${t.profileId}|${tzDayKey(t.deadlineAt)}`;
+    existingCounts.set(key, (existingCounts.get(key) ?? 0) + 1);
+  }
 
   let created = 0;
 
   for (const d of days) {
-    const profileIds = WEEKDAY_ROTATION[d.weekday];
-    if (!profileIds) continue;
-
-    for (const profileId of profileIds) {
+    // Rotation: 2 varying profiles/day.
+    const rotationProfileIds = WEEKDAY_ROTATION[d.weekday] ?? [];
+    for (const profileId of rotationProfileIds) {
       const profile = profileById.get(profileId);
       if (!profile) continue;
       if (existingKeys.has(`${profileId}|${d.dayKey}`)) continue;
@@ -100,10 +109,26 @@ export async function generateDailyTasks() {
         },
       });
       created++;
-
-      // Only ping the worker for today's tasks — pre-populated future days
-      // are just a calendar preview, not something to act on yet.
       if (d.offset === 0) await notifyTaskAssigned(task.id);
+    }
+
+    // Fixed-count profiles: exactly N Reels every day, independent of weekday.
+    for (const profile of fixedCountProfiles) {
+      const key = `${profile.id}|${d.dayKey}`;
+      const already = existingCounts.get(key) ?? 0;
+      for (let i = already; i < profile.dailyReelCount; i++) {
+        const task = await prisma.contentTask.create({
+          data: {
+            profileId: profile.id,
+            assignedUserId: worker.id,
+            title: `${profile.name} Reel ${i + 1}/${profile.dailyReelCount}`,
+            deadlineAt: d.deadline,
+            status: "PLANNED",
+          },
+        });
+        created++;
+        if (d.offset === 0) await notifyTaskAssigned(task.id);
+      }
     }
   }
 

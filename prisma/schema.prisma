@@ -57,6 +57,11 @@ enum AdjustmentStatus {
   REJECTED
 }
 
+enum AdjustmentCategory {
+  GENERAL
+  PUPIO_QUALITY
+}
+
 model PointsAdjustment {
   id     String @id @default(cuid())
   userId String
@@ -64,15 +69,23 @@ model PointsAdjustment {
   amount Int
   reason String
 
-  /** True when the worker requested this themselves (extra-effort bonus); false for admin-issued penalties, which are always pre-decided. */
-  requestedByWorker Boolean          @default(false)
-  status            AdjustmentStatus @default(APPROVED)
+  /** True when the worker requested this themselves (extra-effort bonus or quality request); false for admin-issued penalties, which are always pre-decided. */
+  requestedByWorker Boolean            @default(false)
+  status            AdjustmentStatus   @default(APPROVED)
+  category          AdjustmentCategory @default(GENERAL)
+
+  /** For PUPIO_QUALITY requests: the specific Reel, minutes spent making it, and the admin's own chosen point value (may differ from `amount`, the worker's ask). */
+  taskId        String?
+  task          ContentTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  prepMinutes   Int?
+  decidedAmount Int?
 
   createdAt DateTime  @default(now())
   decidedAt DateTime?
 
   @@index([userId])
   @@index([status])
+  @@index([taskId])
 }
 
 model Profile {
@@ -83,6 +96,12 @@ model Profile {
   color              String   @default("#6366f1")
   notes              String?
   active             Boolean  @default(true)
+
+  /** When true, publishing a Reel for this profile requires prep-time + a separate quality-bonus request that an admin decides on independently (see PointsAdjustment). */
+  qualityTracked     Boolean  @default(false)
+  /** How many Reels/day to auto-generate for this profile, on top of the standard weekday rotation. 0 = not part of the fixed-daily-count schedule. */
+  dailyReelCount     Int      @default(0)
+
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -119,7 +138,8 @@ model ContentTask {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  analytics Analytics?
+  analytics         Analytics?
+  qualityAdjustments PointsAdjustment[]
 
   @@index([deadlineAt])
   @@index([status])

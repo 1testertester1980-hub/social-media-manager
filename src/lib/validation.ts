@@ -28,6 +28,12 @@ export const publishTaskSchema = z.object({
   comments: z.coerce.number().int().nonnegative().optional(),
 });
 
+/** Extra fields required when publishing a Reel for a quality-tracked profile (e.g. Pupio). */
+export const qualityPublishExtraSchema = z.object({
+  prepMinutes: z.coerce.number().int().positive("Zadajte čas prípravy v minútach"),
+  requestedPoints: z.coerce.number().int().min(1, "Minimálne 1 bod").max(10, "Maximálne 10 bodov"),
+});
+
 export const analyticsSchema = z.object({
   views: z.coerce.number().int().nonnegative().default(0),
   reach: z.coerce.number().int().nonnegative().default(0),

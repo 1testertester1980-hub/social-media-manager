@@ -25,7 +25,10 @@ export async function getUserPoints(userId: string) {
     prisma.user.findUnique({ where: { id: userId }, select: { bonusPoints: true } }),
     prisma.contentTask.count({ where: { assignedUserId: userId, status: "PUBLISHED" } }),
     prisma.contentTask.count({ where: { assignedUserId: userId, status: "OVERDUE" } }),
-    prisma.pointsAdjustment.findMany({ where: { userId }, orderBy: { createdAt: "desc" } }),
+    prisma.pointsAdjustment.findMany({
+      where: { userId, category: "GENERAL" },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
   const bonusPoints = user?.bonusPoints ?? 0;
   const approved = adjustments.filter((a) => a.status === "APPROVED");
@@ -56,20 +59,57 @@ function todayRangeBratislava() {
   return { start, end };
 }
 
-/** The worker's own bonus-effort request for today, if they already submitted one. */
+/** The worker's own extra-effort bonus request for today, if they already submitted one. */
 export async function getTodaysBonusRequest(userId: string) {
   const { start, end } = todayRangeBratislava();
   return prisma.pointsAdjustment.findFirst({
-    where: { userId, requestedByWorker: true, createdAt: { gte: start, lt: end } },
+    where: { userId, requestedByWorker: true, category: "GENERAL", createdAt: { gte: start, lt: end } },
     orderBy: { createdAt: "desc" },
   });
 }
 
-/** All pending worker bonus requests, for the admin dashboard. */
+/** All pending general (extra-effort) worker bonus requests, for the admin dashboard. */
 export async function getPendingBonusRequests() {
   return prisma.pointsAdjustment.findMany({
-    where: { requestedByWorker: true, status: "PENDING" },
+    where: { requestedByWorker: true, status: "PENDING", category: "GENERAL" },
     include: { user: { select: { id: true, name: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+/**
+ * Pupio quality score: sum of APPROVED PUPIO_QUALITY adjustments, using the
+ * admin's own decidedAmount (not the worker's requested amount). Entirely
+ * separate from the general score above.
+ */
+export async function getUserQualityPoints(userId: string) {
+  const adjustments = await prisma.pointsAdjustment.findMany({
+    where: { userId, category: "PUPIO_QUALITY" },
+    include: { task: { select: { id: true, title: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  const approved = adjustments.filter((a) => a.status === "APPROVED");
+  const points = approved.reduce((sum, a) => sum + (a.decidedAmount ?? a.amount), 0);
+  return { points, adjustments };
+}
+
+/** Pupio quality points for every worker, for admin-facing lists. */
+export async function getAllWorkerQualityPoints() {
+  const workers = await prisma.user.findMany({ where: { role: "WORKER" }, select: { id: true } });
+  const entries = await Promise.all(
+    workers.map(async (w) => [w.id, await getUserQualityPoints(w.id)] as const)
+  );
+  return new Map(entries);
+}
+
+/** All pending Pupio quality requests, for the admin dashboard. */
+export async function getPendingQualityRequests() {
+  return prisma.pointsAdjustment.findMany({
+    where: { requestedByWorker: true, status: "PENDING", category: "PUPIO_QUALITY" },
+    include: {
+      user: { select: { id: true, name: true } },
+      task: { select: { id: true, title: true } },
+    },
     orderBy: { createdAt: "asc" },
   });
 }

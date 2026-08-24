@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import { Trophy, CheckCircle2, AlertTriangle, MinusCircle } from "lucide-react";
+import { Trophy, CheckCircle2, AlertTriangle, MinusCircle, Gem, Timer, Clock } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import { getUserPoints } from "@/lib/queries";
+import { getUserPoints, getUserQualityPoints } from "@/lib/queries";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { AccountForm } from "@/components/account/account-form";
 import { cn, formatDateTime } from "@/lib/utils";
@@ -15,6 +15,7 @@ export default async function AccountPage() {
   if (!user) redirect("/login");
 
   const score = user.role === "WORKER" ? await getUserPoints(user.id) : null;
+  const qualityScore = user.role === "WORKER" ? await getUserQualityPoints(user.id) : null;
 
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-6">
@@ -87,6 +88,55 @@ export default async function AccountPage() {
                 <p className="mt-0.5 text-slate-600">{a.reason}</p>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {qualityScore && (
+        <Card className="border-purple-200">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Gem className="h-4 w-4 text-purple-500" />
+              <CardTitle>Pupio kvalita (oddelené body)</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <p className="text-4xl font-bold text-purple-600">{qualityScore.points} b.</p>
+            <p className="text-xs text-slate-400">
+              Tieto body sú úplne oddelené od bežných bodov. Za každý Pupio Reel zadáš čas
+              prípravy a koľko bodov by si chcel — admin nezávisle rozhodne o finálnom počte.
+            </p>
+            {qualityScore.adjustments.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {qualityScore.adjustments.map((a) => (
+                  <div key={a.id} className="rounded-lg bg-purple-50 px-3 py-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="truncate font-medium text-slate-900">{a.task?.title ?? a.reason}</span>
+                      {a.status === "APPROVED" ? (
+                        <span className="shrink-0 font-semibold text-purple-700">
+                          {a.decidedAmount ?? a.amount} b.
+                        </span>
+                      ) : (
+                        <span className="shrink-0 text-xs font-medium text-amber-600">
+                          <Clock className="mr-1 inline h-3 w-3" />
+                          čaká
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-3 text-xs text-slate-500">
+                      {a.prepMinutes !== null && (
+                        <span className="flex items-center gap-1">
+                          <Timer className="h-3 w-3" />
+                          {a.prepMinutes} min
+                        </span>
+                      )}
+                      <span>žiadal si {a.amount} b.</span>
+                      <span>{formatDateTime(a.createdAt)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

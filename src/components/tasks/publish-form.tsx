@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Timer } from "lucide-react";
 import { publishTask } from "@/actions/tasks";
 import { Field, Input, Textarea } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
@@ -19,14 +19,18 @@ function SubmitButton() {
   );
 }
 
-export function PublishForm({ taskId }: { taskId: string }) {
+export function PublishForm({ taskId, qualityTracked = false }: { taskId: string; qualityTracked?: boolean }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
   async function action(formData: FormData) {
     const result = await publishTask(taskId, formData);
     if (result.ok) {
-      toast.success("Reel bol úspešne označený ako zverejnený.");
+      toast.success(
+        qualityTracked
+          ? "Reel bol zverejnený. Žiadosť o kvalitné body čaká na rozhodnutie admina."
+          : "Reel bol úspešne označený ako zverejnený."
+      );
       router.refresh();
     } else {
       toast.error(result.error);
@@ -60,6 +64,29 @@ export function PublishForm({ taskId }: { taskId: string }) {
       <Field label="Poznámka (voliteľné)" htmlFor="workerNote">
         <Textarea id="workerNote" name="workerNote" rows={3} />
       </Field>
+
+      {qualityTracked && (
+        <div className="flex flex-col gap-4 rounded-xl border border-purple-200 bg-purple-50/50 p-4">
+          <div className="flex items-center gap-2">
+            <Timer className="h-4 w-4 text-purple-600" />
+            <p className="text-sm font-semibold text-purple-900">Kvalita a čas prípravy</p>
+          </div>
+          <p className="text-xs text-purple-700">
+            Tento profil má dôraz na kvalitu. Zapíš, koľko minút si strávil prípravou a tvorbou tohto
+            Reelu (bez limitu), a koľko bodov by si za to chcel — admin následne sám rozhodne o
+            konečnom počte.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Minúty prípravy" htmlFor="prepMinutes" required>
+              <Input id="prepMinutes" name="prepMinutes" type="number" min={1} required placeholder="Napr. 45" />
+            </Field>
+            <Field label="Koľko bodov by si chcel?" htmlFor="requestedPoints" required>
+              <Input id="requestedPoints" name="requestedPoints" type="number" min={1} max={10} required placeholder="1-10" />
+            </Field>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-3">
         <Button type="button" variant="outline" className="flex-1" onClick={() => setOpen(false)}>
           Zrušiť

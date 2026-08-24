@@ -175,3 +175,41 @@ export async function decideBonusRequest(
   revalidatePath("/settings/users");
   return { ok: true, data: undefined };
 }
+
+/**
+ * Admin decides the final Pupio quality-bonus points for a Reel — their own
+ * chosen number, independent of what the worker asked for. Always results
+ * in an APPROVED entry (even if the admin picks 0), so it's a single
+ * "decide" action rather than a separate approve/reject.
+ */
+export async function decideQualityRequest(adjustmentId: string, decidedAmount: number): Promise<ActionResult> {
+  await requireAdmin();
+
+  if (!Number.isInteger(decidedAmount) || decidedAmount < 0 || decidedAmount > 20) {
+    return { ok: false, error: "Zadajte počet bodov 0-20" };
+  }
+
+  const adjustment = await prisma.pointsAdjustment.findUnique({ where: { id: adjustmentId } });
+  if (!adjustment || !adjustment.requestedByWorker || adjustment.status !== "PENDING" || adjustment.category !== "PUPIO_QUALITY") {
+    return { ok: false, error: "Žiadosť už bola vybavená" };
+  }
+
+  await prisma.pointsAdjustment.update({
+    where: { id: adjustmentId },
+    data: { status: "APPROVED", decidedAmount, decidedAt: new Date() },
+  });
+
+  await prisma.notification.create({
+    data: {
+      userId: adjustment.userId,
+      type: "SYSTEM",
+      title: "Pupio kvalitné body pridelené",
+      message: `Za "${adjustment.reason}" ti admin pridelil ${decidedAmount} b. (žiadal si ${adjustment.amount} b.)`,
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/my-tasks");
+  revalidatePath("/account");
+  return { ok: true, data: undefined };
+}

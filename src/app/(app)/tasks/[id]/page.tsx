@@ -212,7 +212,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
         </Card>
       )}
 
-      {canPublish && <PublishForm taskId={task.id} />}
+      {canPublish && <PublishForm taskId={task.id} qualityTracked={task.profile.qualityTracked} />}
 
       {isAdmin && task.status === "PUBLISHED" && (
         <AnalyticsForm taskId={task.id} analytics={task.analytics} />
