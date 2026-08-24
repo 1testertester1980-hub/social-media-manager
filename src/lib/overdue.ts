@@ -9,9 +9,17 @@ import { notifyTaskOverdue } from "@/lib/notify";
  *
  * Quality-tracked profiles (Pupio) are exempt — there's no time limit on
  * those Reels, only a daily count, so they never get flagged as overdue.
+ * Also un-flips any quality-tracked task that was already wrongly marked
+ * OVERDUE before this exemption existed.
  */
 export async function syncOverdueTasks() {
   const now = new Date();
+
+  await prisma.contentTask.updateMany({
+    where: { status: "OVERDUE", profile: { qualityTracked: true } },
+    data: { status: "PLANNED" },
+  });
+
   const newlyOverdue = await prisma.contentTask.findMany({
     where: {
       status: { in: ["PLANNED", "TODO"] },
