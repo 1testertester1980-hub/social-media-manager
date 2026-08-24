@@ -18,6 +18,7 @@ import { Reveal } from "@/components/marketing/reveal";
 import { SpotlightCard } from "@/components/marketing/spotlight-card";
 import { SiteHeader } from "@/components/marketing/site-header";
 import { ProductMockup } from "@/components/marketing/product-mockup";
+import { LinkedinIcon } from "@/components/marketing/linkedin-icon";
 
 const SERVICES = [
   {
@@ -278,9 +279,17 @@ export default async function RootPage() {
             </div>
             <span className="text-sm font-semibold">Croxan s.r.o.</span>
           </div>
-          <p className="text-xs text-slate-500">
-            © {new Date().getFullYear()} Croxan s.r.o. — {PHONE}
-          </p>
+          <div className="flex items-center gap-5">
+            <p className="text-xs text-slate-500">
+              © {new Date().getFullYear()} Croxan s.r.o. — {PHONE}
+            </p>
+            <span
+              aria-label="LinkedIn (čoskoro)"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 text-slate-400 transition hover:border-white/20 hover:text-white"
+            >
+              <LinkedinIcon className="h-4 w-4" />
+            </span>
+          </div>
         </div>
       </footer>
     </div>
