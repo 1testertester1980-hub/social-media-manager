@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { zonedTimeToUtc, tzDayKey } from "@/lib/utils";
 
 export function monthRange(year: number, month: number) {
   const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
@@ -10,20 +11,51 @@ export function monthRange(year: number, month: number) {
 const POINTS_PER_PUBLISHED = 3;
 const POINTS_PER_OVERDUE = 3;
 
+/** Pupio has no per-Reel deadline, but at least 1 Reel/day is required from this date on — 0 published that day costs 3 points. */
+const PUPIO_MIN_PENALTY = 3;
+const PUPIO_MIN_ENFORCEMENT_START = zonedTimeToUtc(2026, 8, 26, 0, 0);
+
+/**
+ * Counts how many fully-elapsed days (since PUPIO_MIN_ENFORCEMENT_START) had
+ * zero published Pupio Reels for this worker, and returns the resulting
+ * point penalty (3 per such day). Computed live from current task status,
+ * same self-correcting approach as the overdue penalty above.
+ */
+async function getPupioMinimumPenalty(userId: string) {
+  const tasks = await prisma.contentTask.findMany({
+    where: {
+      assignedUserId: userId,
+      profile: { qualityTracked: true },
+      deadlineAt: { gte: PUPIO_MIN_ENFORCEMENT_START, lt: new Date() },
+    },
+    select: { deadlineAt: true, status: true },
+  });
+
+  const publishedByDay = new Map<string, boolean>();
+  for (const t of tasks) {
+    const key = tzDayKey(t.deadlineAt);
+    publishedByDay.set(key, (publishedByDay.get(key) ?? false) || t.status === "PUBLISHED");
+  }
+
+  const missedDays = Array.from(publishedByDay.values()).filter((published) => !published).length;
+  return missedDays * PUPIO_MIN_PENALTY;
+}
+
 /**
  * Worker score: bonusPoints (a manually set starting balance, set by an
- * admin) + 3 per published Reel - 3 per Reel that missed its deadline, plus
- * the sum of APPROVED adjustment entries (admin penalties, always
- * pre-approved; worker bonus requests only count once an admin approves
- * them). The task-derived part is computed live from current status (not a
- * stored counter), so it self-corrects if an admin later publishes an
- * overdue task.
+ * admin) + 3 per published Reel - 3 per Reel that missed its deadline - 3
+ * per day since 26.8.2026 with zero published Pupio Reels, plus the sum of
+ * APPROVED adjustment entries (admin penalties, always pre-approved; worker
+ * bonus requests only count once an admin approves them). The task-derived
+ * parts are computed live from current status (not a stored counter), so
+ * they self-correct if an admin later publishes an overdue task.
  */
 export async function getUserPoints(userId: string) {
-  const [user, published, overdue, adjustments] = await Promise.all([
+  const [user, published, overdue, pupioMinPenalty, adjustments] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { bonusPoints: true } }),
     prisma.contentTask.count({ where: { assignedUserId: userId, status: "PUBLISHED" } }),
     prisma.contentTask.count({ where: { assignedUserId: userId, status: "OVERDUE" } }),
+    getPupioMinimumPenalty(userId),
     prisma.pointsAdjustment.findMany({
       where: { userId, category: "GENERAL" },
       orderBy: { createdAt: "desc" },
@@ -33,10 +65,16 @@ export async function getUserPoints(userId: string) {
   const approved = adjustments.filter((a) => a.status === "APPROVED");
   const adjustmentTotal = approved.reduce((sum, a) => sum + a.amount, 0);
   return {
-    points: bonusPoints + published * POINTS_PER_PUBLISHED - overdue * POINTS_PER_OVERDUE + adjustmentTotal,
+    points:
+      bonusPoints +
+      published * POINTS_PER_PUBLISHED -
+      overdue * POINTS_PER_OVERDUE -
+      pupioMinPenalty +
+      adjustmentTotal,
     bonusPoints,
     published,
     overdue,
+    pupioMinPenalty,
     adjustments,
     adjustmentTotal,
   };

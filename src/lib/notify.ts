@@ -78,6 +78,39 @@ export async function notifyTaskOverdue(taskId: string) {
   );
 }
 
+const PUPIO_MIN_ANNOUNCEMENT_TITLE = "Pupio: minimálne 1 Reel denne";
+
+/**
+ * One-time announcement of the new "at least 1 Pupio Reel/day, -3 body from
+ * 26.8.2026" rule to every active worker. Idempotent — checked by title, so
+ * safe to call on every page load; only actually sends once per worker.
+ */
+export async function announcePupioMinimumRuleIfNeeded() {
+  const workers = await prisma.user.findMany({ where: { role: "WORKER", active: true } });
+
+  for (const worker of workers) {
+    const already = await prisma.notification.findFirst({
+      where: { userId: worker.id, title: PUPIO_MIN_ANNOUNCEMENT_TITLE },
+    });
+    if (already) continue;
+
+    await createNotification({
+      userId: worker.id,
+      type: "SYSTEM",
+      title: PUPIO_MIN_ANNOUNCEMENT_TITLE,
+      message:
+        "Pupio nemá termín, ale musíš zverejniť aspoň 1 Reel denne. Od 26. 8. 2026 sa ti za každý deň bez ani jedného Pupio Reelu strhnú 3 body.",
+    });
+
+    await sendTelegramMessage(
+      worker.telegramChatId,
+      `📢 <b>Pupio: minimálne 1 Reel denne</b>\n\n` +
+        `Pupio nemá pevný termín, ale musíš zverejniť aspoň 1 Reel denne.\n` +
+        `Od <b>26. 8. 2026</b>: ak za daný deň nezverejníš ani jeden Pupio Reel, strhnú sa ti <b>-3 body</b>.`
+    );
+  }
+}
+
 export async function notifyTaskPublished(taskId: string) {
   const task = await prisma.contentTask.findUnique({
     where: { id: taskId },

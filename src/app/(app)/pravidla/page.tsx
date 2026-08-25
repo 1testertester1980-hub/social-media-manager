@@ -1,4 +1,4 @@
-import { Clock, Trophy, CheckCircle2, AlertTriangle, KeyRound } from "lucide-react";
+import { Clock, Trophy, CheckCircle2, AlertTriangle, KeyRound, Gem } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { WEEKDAY_ROTATION, DAILY_DEADLINE_HOUR, DAILY_DEADLINE_MINUTE } from "@/lib/rotation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -94,6 +94,28 @@ export default async function PravidlaPage() {
             Svoj aktuálny počet bodov vidíš vždy v sekcii{" "}
             <span className="font-medium text-slate-700">Profil</span>.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-purple-200">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Gem className="h-4 w-4 text-purple-500" />
+            <CardTitle>Pupio — minimálne 1 Reel denne</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-slate-700">
+            Pupio nemá pevný termín na jednotlivé Reely, takže nemôže byť &bdquo;po termíne&ldquo;. Platí ale
+            jedno pravidlo: <strong>aspoň 1 Pupio Reel musíš zverejniť každý deň.</strong>
+          </p>
+          <div className="flex items-center gap-3 rounded-lg bg-red-50 px-3 py-2.5">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" />
+            <p className="text-sm text-red-800">
+              Od <strong>26. 8. 2026</strong>: ak za daný deň nezverejníš ani jeden Pupio Reel,
+              strhnú sa ti <strong>-3 body</strong>.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
