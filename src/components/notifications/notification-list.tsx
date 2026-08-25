@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Bell, CheckCheck } from "lucide-react";
-import { markNotificationRead, markAllNotificationsRead } from "@/actions/notifications";
+import { Bell, CheckCheck, Trash2 } from "lucide-react";
+import { markNotificationRead, markAllNotificationsRead, deleteAllNotifications } from "@/actions/notifications";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn, formatDateTime } from "@/lib/utils";
 
@@ -28,6 +30,8 @@ type Notification = {
 
 export function NotificationList({ notifications }: { notifications: Notification[] }) {
   const router = useRouter();
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function handleRead(id: string) {
     const result = await markNotificationRead(id);
@@ -38,6 +42,17 @@ export function NotificationList({ notifications }: { notifications: Notificatio
     const result = await markAllNotificationsRead();
     if (result.ok) {
       toast.success("Všetky notifikácie boli označené ako prečítané.");
+      router.refresh();
+    }
+  }
+
+  async function handleDeleteAll() {
+    setDeleting(true);
+    const result = await deleteAllNotifications();
+    setDeleting(false);
+    setConfirmDeleteAll(false);
+    if (result.ok) {
+      toast.success("Všetky notifikácie boli vymazané.");
       router.refresh();
     }
   }
@@ -54,14 +69,32 @@ export function NotificationList({ notifications }: { notifications: Notificatio
 
   return (
     <div className="flex flex-col gap-3">
-      {hasUnread && (
-        <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {hasUnread && (
           <Button variant="outline" size="sm" onClick={handleReadAll}>
             <CheckCheck className="h-4 w-4" />
             Označiť všetky ako prečítané
           </Button>
+        )}
+        <Button variant="outline" size="sm" onClick={() => setConfirmDeleteAll(true)}>
+          <Trash2 className="h-4 w-4" />
+          Vymazať všetky notifikácie
+        </Button>
+      </div>
+
+      <Dialog open={confirmDeleteAll} onClose={() => setConfirmDeleteAll(false)} title="Vymazať všetky notifikácie?">
+        <p className="mb-5 text-sm text-slate-600">
+          Táto akcia je nezvratná. Všetky tvoje notifikácie budú natrvalo odstránené.
+        </p>
+        <div className="flex justify-end gap-3">
+          <Button variant="outline" onClick={() => setConfirmDeleteAll(false)}>
+            Späť
+          </Button>
+          <Button variant="danger" loading={deleting} onClick={handleDeleteAll}>
+            Vymazať natrvalo
+          </Button>
         </div>
-      )}
+      </Dialog>
       <div className="flex flex-col divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
         {notifications.map((n) => {
           const content = (

@@ -25,3 +25,10 @@ export async function markAllNotificationsRead(): Promise<ActionResult> {
   revalidatePath("/notifications");
   return { ok: true, data: undefined };
 }
+
+export async function deleteAllNotifications(): Promise<ActionResult> {
+  const user = await requireUser();
+  await prisma.notification.deleteMany({ where: { userId: user.id } });
+  revalidatePath("/notifications");
+  return { ok: true, data: undefined };
+}
