@@ -78,9 +78,18 @@ export const pointsPenaltySchema = z.object({
   reason: z.string().min(3, "Zadajte dôvod (aspoň 3 znaky)").max(300),
 });
 
-export const bonusRequestSchema = z.object({
-  amount: z.coerce.number().int().min(1).max(5),
-  note: z.string().max(300).optional().or(z.literal("")),
+export const createGoalSchema = z.object({
+  title: z.string().min(3, "Zadajte cieľ (aspoň 3 znaky)").max(200),
+  targetValue: z.string().max(20).optional().or(z.literal("")),
+  unit: z.string().max(50).optional().or(z.literal("")),
+});
+
+export const updateGoalProgressSchema = z.object({
+  currentValue: z.coerce.number().int().min(0),
+});
+
+export const requestGoalCompletionSchema = z.object({
+  points: z.coerce.number().int().refine((v) => v === 5 || v === 10, "Vyberte 5 alebo 10 bodov"),
 });
 
 export const appSettingsSchema = z.object({

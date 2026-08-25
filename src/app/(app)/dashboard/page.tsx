@@ -2,7 +2,7 @@ import { Film, CheckCircle2, AlertTriangle, Percent, Eye, Users2, Heart, Message
 import {
   getDashboardData,
   getAllWorkerPoints,
-  getPendingBonusRequests,
+  getPendingGoalRequests,
   getAllWorkerQualityPoints,
   getPendingQualityRequests,
 } from "@/lib/queries";
@@ -14,7 +14,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ProfilePerformanceChart } from "@/components/dashboard/profile-performance-chart";
 import { ResetOverdueButton } from "@/components/dashboard/reset-overdue-button";
-import { PendingBonusRequestsCard } from "@/components/dashboard/pending-bonus-requests-card";
+import { PendingGoalRequestsCard } from "@/components/dashboard/pending-goal-requests-card";
 import { PendingQualityRequestsCard } from "@/components/dashboard/pending-quality-requests-card";
 import { formatNumber, formatPercent, formatDateTime, cn } from "@/lib/utils";
 
@@ -23,14 +23,14 @@ export default async function DashboardPage() {
     { kpis, todayTasks, overdueTasks, profilePerformance, overdueStatsResetAt },
     workers,
     pointsByUser,
-    pendingBonusRequests,
+    pendingGoalRequests,
     qualityPointsByUser,
     pendingQualityRequests,
   ] = await Promise.all([
     getDashboardData(),
     prisma.user.findMany({ where: { role: "WORKER" }, orderBy: { name: "asc" } }),
     getAllWorkerPoints(),
-    getPendingBonusRequests(),
+    getPendingGoalRequests(),
     getAllWorkerQualityPoints(),
     getPendingQualityRequests(),
   ]);
@@ -57,7 +57,7 @@ export default async function DashboardPage() {
         </ButtonLink>
       </div>
 
-      <PendingBonusRequestsCard requests={pendingBonusRequests} />
+      <PendingGoalRequestsCard requests={pendingGoalRequests} />
       <PendingQualityRequestsCard requests={pendingQualityRequests} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

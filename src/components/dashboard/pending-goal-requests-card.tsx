@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Sparkles, Check, X } from "lucide-react";
-import { decideBonusRequest } from "@/actions/users";
+import { Target, Check, X } from "lucide-react";
+import { decideGoalCompletion } from "@/actions/goals";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/utils";
@@ -12,9 +12,9 @@ import { formatDateTime } from "@/lib/utils";
 type Request = {
   id: string;
   amount: number;
-  reason: string;
   createdAt: Date;
   user: { id: string; name: string };
+  goal: { id: string; title: string; targetValue: number | null; currentValue: number | null; unit: string | null } | null;
 };
 
 function RequestRow({ request }: { request: Request }) {
@@ -23,7 +23,7 @@ function RequestRow({ request }: { request: Request }) {
 
   async function decide(decision: "APPROVE" | "REJECT") {
     setBusy(decision);
-    const result = await decideBonusRequest(request.id, decision);
+    const result = await decideGoalCompletion(request.id, decision);
     setBusy(null);
     if (result.ok) {
       toast.success(decision === "APPROVE" ? "Body boli schválené." : "Žiadosť bola zamietnutá.");
@@ -42,7 +42,12 @@ function RequestRow({ request }: { request: Request }) {
             +{request.amount} b.
           </span>
         </div>
-        <p className="mt-0.5 truncate text-sm text-slate-500">{request.reason}</p>
+        <p className="mt-0.5 truncate text-sm text-slate-500">{request.goal?.title ?? "Marketingový cieľ"}</p>
+        {request.goal?.targetValue !== null && request.goal?.targetValue !== undefined && (
+          <p className="mt-0.5 text-xs text-slate-400">
+            {request.goal.currentValue ?? 0} / {request.goal.targetValue} {request.goal.unit ?? ""}
+          </p>
+        )}
         <p className="mt-0.5 text-xs text-slate-400">{formatDateTime(request.createdAt)}</p>
       </div>
       <div className="flex shrink-0 gap-2">
@@ -59,15 +64,15 @@ function RequestRow({ request }: { request: Request }) {
   );
 }
 
-export function PendingBonusRequestsCard({ requests }: { requests: Request[] }) {
+export function PendingGoalRequestsCard({ requests }: { requests: Request[] }) {
   if (requests.length === 0) return null;
 
   return (
     <Card className="border-amber-200">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-amber-500" />
-          <CardTitle>Žiadosti o bonusové body ({requests.length})</CardTitle>
+          <Target className="h-4 w-4 text-amber-500" />
+          <CardTitle>Splnené marketingové ciele ({requests.length})</CardTitle>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">

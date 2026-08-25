@@ -46,6 +46,7 @@ model User {
   assignedTasks     ContentTask[]      @relation("AssignedTasks")
   notifications     Notification[]
   pointsAdjustments PointsAdjustment[]
+  marketingGoals    MarketingGoal[]
 
   @@index([role])
 }
@@ -80,12 +81,42 @@ model PointsAdjustment {
   prepMinutes   Int?
   decidedAmount Int?
 
+  /** For marketing-strategy completion requests: the goal this points request is tied to. */
+  goalId String?         @unique
+  goal   MarketingGoal? @relation(fields: [goalId], references: [id], onDelete: SetNull)
+
   createdAt DateTime  @default(now())
   decidedAt DateTime?
 
   @@index([userId])
   @@index([status])
   @@index([taskId])
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+}
+
+/** A worker-defined marketing target (e.g. "5000 views this month") they track progress against and can request a 5 or 10 point reward for once fulfilled. */
+model MarketingGoal {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title        String
+  targetValue  Int?
+  currentValue Int?
+  unit         String?
+  status       GoalStatus @default(ACTIVE)
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  pointsAdjustment PointsAdjustment?
+
+  @@index([userId])
+  @@index([status])
 }
 
 model Profile {

@@ -2,16 +2,16 @@ import { redirect } from "next/navigation";
 import { ListChecks } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import { getTodaysBonusRequest } from "@/lib/queries";
+import { getActiveGoals } from "@/lib/queries";
 import { WorkerTaskCard } from "@/components/tasks/worker-task-card";
-import { BonusRequestCard } from "@/components/tasks/bonus-request-card";
+import { MarketingGoalCard } from "@/components/goals/marketing-goal-card";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function MyTasksPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const todaysBonusRequest = user.role === "WORKER" ? await getTodaysBonusRequest(user.id) : null;
+  const activeGoals = user.role === "WORKER" ? await getActiveGoals(user.id) : [];
 
   const now = new Date();
   const todayStart = new Date(now.toDateString());
@@ -47,15 +47,7 @@ export default async function MyTasksPage() {
         <p className="text-sm text-slate-500">Ahoj {user.name}, tu sú tvoje úlohy</p>
       </div>
 
-      {user.role === "WORKER" && (
-        <BonusRequestCard
-          existingRequest={
-            todaysBonusRequest
-              ? { amount: todaysBonusRequest.amount, status: todaysBonusRequest.status }
-              : null
-          }
-        />
-      )}
+      {user.role === "WORKER" && <MarketingGoalCard goals={activeGoals} />}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Dnes</h2>

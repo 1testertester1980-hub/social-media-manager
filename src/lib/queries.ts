@@ -1,6 +1,5 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { zonedTimeToUtc, tzDayKey } from "@/lib/utils";
 
 export function monthRange(year: number, month: number) {
   const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
@@ -52,27 +51,32 @@ export async function getAllWorkerPoints() {
   return new Map(entries);
 }
 
-function todayRangeBratislava() {
-  const [year, month, day] = tzDayKey(new Date()).split("-").map(Number);
-  const start = zonedTimeToUtc(year, month, day, 0, 0);
-  const end = new Date(start.getTime() + 86400000);
-  return { start, end };
-}
-
-/** The worker's own extra-effort bonus request for today, if they already submitted one. */
-export async function getTodaysBonusRequest(userId: string) {
-  const { start, end } = todayRangeBratislava();
-  return prisma.pointsAdjustment.findFirst({
-    where: { userId, requestedByWorker: true, category: "GENERAL", createdAt: { gte: start, lt: end } },
+/** A worker's active (not yet completed) marketing goals, with any linked completion request. */
+export async function getActiveGoals(userId: string) {
+  return prisma.marketingGoal.findMany({
+    where: { userId, status: "ACTIVE" },
+    include: { pointsAdjustment: true },
     orderBy: { createdAt: "desc" },
   });
 }
 
-/** All pending general (extra-effort) worker bonus requests, for the admin dashboard. */
-export async function getPendingBonusRequests() {
+/** Full goal history (active + completed) for a worker, for the dedicated strategy page. */
+export async function getAllGoalsForUser(userId: string) {
+  return prisma.marketingGoal.findMany({
+    where: { userId },
+    include: { pointsAdjustment: true },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+/** All pending marketing-goal completion requests, for the admin dashboard. */
+export async function getPendingGoalRequests() {
   return prisma.pointsAdjustment.findMany({
-    where: { requestedByWorker: true, status: "PENDING", category: "GENERAL" },
-    include: { user: { select: { id: true, name: true } } },
+    where: { requestedByWorker: true, status: "PENDING", category: "GENERAL", goalId: { not: null } },
+    include: {
+      user: { select: { id: true, name: true } },
+      goal: { select: { id: true, title: true, targetValue: true, currentValue: true, unit: true } },
+    },
     orderBy: { createdAt: "asc" },
   });
 }
