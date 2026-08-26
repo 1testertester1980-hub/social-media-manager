@@ -127,7 +127,12 @@ export async function getEarningsSummary(userId: string) {
   return {
     earnedEuros: earnedPoints * EUR_PER_POINT,
     lostEuros: lostPoints * EUR_PER_POINT,
+    overdueCount,
+    pupioMissedDays,
     maxEuros: maxMonth.maxEuros,
+    daysInMonth: maxMonth.daysInMonth,
+    totalReelsMonth: maxMonth.totalReels,
+    reelsPerDay: maxMonth.daysInMonth > 0 ? Math.round(maxMonth.totalReels / maxMonth.daysInMonth) : 0,
     todayTotal,
     todayDone,
     todayRemaining,
