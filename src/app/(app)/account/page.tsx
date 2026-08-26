@@ -1,11 +1,16 @@
 import { redirect } from "next/navigation";
-import { Trophy, CheckCircle2, AlertTriangle, MinusCircle, Gem, Timer, Clock } from "lucide-react";
+import { Trophy, CheckCircle2, AlertTriangle, MinusCircle, Gem, Timer, Clock, Sparkles } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import { getUserPoints, getUserQualityPoints } from "@/lib/queries";
+import { getUserPoints, getUserQualityPoints, getMaxMonthlyEarnings } from "@/lib/queries";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { AccountForm } from "@/components/account/account-form";
-import { cn, formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime, tzDayKey } from "@/lib/utils";
+
+const MONTH_NAMES_SK = [
+  "január", "február", "marec", "apríl", "máj", "jún",
+  "júl", "august", "september", "október", "november", "december",
+];
 
 export default async function AccountPage() {
   const sessionUser = await getSessionUser();
@@ -16,6 +21,8 @@ export default async function AccountPage() {
 
   const score = user.role === "WORKER" ? await getUserPoints(user.id) : null;
   const qualityScore = user.role === "WORKER" ? await getUserQualityPoints(user.id) : null;
+  const [nowYear, nowMonth] = tzDayKey(new Date()).split("-").map(Number);
+  const maxEarnings = user.role === "WORKER" ? await getMaxMonthlyEarnings(nowYear, nowMonth) : null;
 
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-6">
@@ -76,6 +83,25 @@ export default async function AccountPage() {
             <p className="text-xs text-slate-400">
               +3 body za každý včas zverejnený Reel, -3 body za každý, čo sa nestihol. Od 26. 8.
               2026 aj -3 body za každý deň, kedy nezverejníš aspoň 1 Pupio Reel.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {maxEarnings && (
+        <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-white">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-emerald-600" />
+              <CardTitle>Koľko môžeš tento mesiac zarobiť</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <p className="text-4xl font-bold text-emerald-700">{maxEarnings.maxEuros} €</p>
+            <p className="text-sm text-slate-600">
+              Ak zverejníš úplne <strong>každý</strong> naplánovaný Reel v {MONTH_NAMES_SK[nowMonth - 1]} —{" "}
+              {maxEarnings.totalReels} Reelov × 3 body — získaš až {maxEarnings.maxPoints} bodov.
+              1 bod = 1 €.
             </p>
           </CardContent>
         </Card>

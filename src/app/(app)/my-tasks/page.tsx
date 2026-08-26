@@ -2,9 +2,10 @@ import { redirect } from "next/navigation";
 import { ListChecks } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import { getActiveGoals } from "@/lib/queries";
+import { getActiveGoals, getEarningsSummary } from "@/lib/queries";
 import { WorkerTaskCard } from "@/components/tasks/worker-task-card";
 import { MarketingGoalCard } from "@/components/goals/marketing-goal-card";
+import { EarningsBanner } from "@/components/goals/earnings-banner";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function MyTasksPage() {
@@ -12,6 +13,7 @@ export default async function MyTasksPage() {
   if (!user) redirect("/login");
 
   const activeGoals = user.role === "WORKER" ? await getActiveGoals(user.id) : [];
+  const earnings = user.role === "WORKER" ? await getEarningsSummary(user.id) : null;
 
   const now = new Date();
   const todayStart = new Date(now.toDateString());
@@ -46,6 +48,8 @@ export default async function MyTasksPage() {
         <h1 className="text-xl font-semibold text-slate-900">Moje úlohy</h1>
         <p className="text-sm text-slate-500">Ahoj {user.name}, tu sú tvoje úlohy</p>
       </div>
+
+      {earnings && <EarningsBanner summary={earnings} />}
 
       {user.role === "WORKER" && <MarketingGoalCard goals={activeGoals} />}
 

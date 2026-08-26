@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { zonedTimeToUtc, tzDayKey } from "@/lib/utils";
+import { WEEKDAY_ROTATION } from "@/lib/rotation";
 
 export function monthRange(year: number, month: number) {
   const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
@@ -39,6 +40,99 @@ async function getPupioMinimumPenalty(userId: string) {
 
   const missedDays = Array.from(publishedByDay.values()).filter((published) => !published).length;
   return missedDays * PUPIO_MIN_PENALTY;
+}
+
+/** 1 bod = 1 € — motivačný prepočet maximálneho zárobku, nič sa naň nevypláca automaticky. */
+const EUR_PER_POINT = 1;
+
+/**
+ * Best-case monthly earnings if every single scheduled Reel that month gets
+ * published on time: (weekday-rotation Reels/day + active fixed-count
+ * profiles' Reels/day, e.g. Pupio) × 3 body × days in month × 1 €/bod.
+ * Derived from the live schedule config, not hardcoded, so it stays correct
+ * if the rotation or Pupio's daily count ever changes.
+ */
+export async function getMaxMonthlyEarnings(year: number, month: number) {
+  const fixedCountProfiles = await prisma.profile.findMany({
+    where: { active: true, dailyReelCount: { gt: 0 } },
+    select: { dailyReelCount: true },
+  });
+  const fixedReelsPerDay = fixedCountProfiles.reduce((sum, p) => sum + p.dailyReelCount, 0);
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  let totalReels = 0;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const weekday = new Date(year, month - 1, day).getDay();
+    const rotationReels = (WEEKDAY_ROTATION[weekday] ?? []).length;
+    totalReels += rotationReels + fixedReelsPerDay;
+  }
+
+  const maxPoints = totalReels * POINTS_PER_PUBLISHED;
+  return { maxPoints, maxEuros: maxPoints * EUR_PER_POINT, daysInMonth, totalReels };
+}
+
+/**
+ * Full earnings picture for the current month, for a motivational banner:
+ * how much he's already earned, how much he's already lost (overdue Reels +
+ * Pupio no-Reel days), the monthly ceiling, and today's specific stakes —
+ * how many Reels are still open today and what they're worth.
+ */
+export async function getEarningsSummary(userId: string) {
+  const now = new Date();
+  const [nowYear, nowMonth, nowDay] = tzDayKey(now).split("-").map(Number);
+  const { start: monthStart, end: monthEnd } = monthRange(nowYear, nowMonth);
+
+  const pupioRangeStart =
+    monthStart < PUPIO_MIN_ENFORCEMENT_START ? PUPIO_MIN_ENFORCEMENT_START : monthStart;
+
+  const todayStart = zonedTimeToUtc(nowYear, nowMonth, nowDay, 0, 0);
+  const todayEnd = new Date(todayStart.getTime() + 86400000);
+
+  const [publishedCount, overdueCount, pupioTasks, todayTasks, maxMonth] = await Promise.all([
+    prisma.contentTask.count({
+      where: { assignedUserId: userId, status: "PUBLISHED", deadlineAt: { gte: monthStart, lt: monthEnd } },
+    }),
+    prisma.contentTask.count({
+      where: { assignedUserId: userId, status: "OVERDUE", deadlineAt: { gte: monthStart, lt: monthEnd } },
+    }),
+    prisma.contentTask.findMany({
+      where: {
+        assignedUserId: userId,
+        profile: { qualityTracked: true },
+        deadlineAt: { gte: pupioRangeStart, lt: now < monthEnd ? now : monthEnd },
+      },
+      select: { deadlineAt: true, status: true },
+    }),
+    prisma.contentTask.findMany({
+      where: { assignedUserId: userId, deadlineAt: { gte: todayStart, lt: todayEnd }, status: { not: "CANCELLED" } },
+      select: { status: true },
+    }),
+    getMaxMonthlyEarnings(nowYear, nowMonth),
+  ]);
+
+  const publishedByDay = new Map<string, boolean>();
+  for (const t of pupioTasks) {
+    const key = tzDayKey(t.deadlineAt);
+    publishedByDay.set(key, (publishedByDay.get(key) ?? false) || t.status === "PUBLISHED");
+  }
+  const pupioMissedDays = Array.from(publishedByDay.values()).filter((published) => !published).length;
+
+  const earnedPoints = publishedCount * POINTS_PER_PUBLISHED;
+  const lostPoints = overdueCount * POINTS_PER_OVERDUE + pupioMissedDays * PUPIO_MIN_PENALTY;
+
+  const todayTotal = todayTasks.length;
+  const todayDone = todayTasks.filter((t) => t.status === "PUBLISHED").length;
+  const todayRemaining = todayTotal - todayDone;
+
+  return {
+    earnedEuros: earnedPoints * EUR_PER_POINT,
+    lostEuros: lostPoints * EUR_PER_POINT,
+    maxEuros: maxMonth.maxEuros,
+    todayTotal,
+    todayDone,
+    todayRemaining,
+    todayRemainingEuros: todayRemaining * POINTS_PER_PUBLISHED * EUR_PER_POINT,
+  };
 }
 
 /**
