@@ -348,23 +348,35 @@ export async function getDashboardData() {
   };
 }
 
+/**
+ * "Po termíne" here counts the same way as the dashboard: only OVERDUE
+ * tasks whose deadline is after the admin's last dashboard reset (if any).
+ * Keeps the two pages showing the same number for the same month instead
+ * of silently disagreeing.
+ */
 export async function getAnalyticsData(params: { year: number; month: number; profileId?: string }) {
   const { start, end } = monthRange(params.year, params.month);
 
-  const tasks = await prisma.contentTask.findMany({
-    where: {
-      deadlineAt: { gte: start, lt: end },
-      ...(params.profileId ? { profileId: params.profileId } : {}),
-    },
-    include: { analytics: true, profile: true, assignedUser: true },
-    orderBy: { deadlineAt: "asc" },
-  });
+  const [tasks, settings] = await Promise.all([
+    prisma.contentTask.findMany({
+      where: {
+        deadlineAt: { gte: start, lt: end },
+        ...(params.profileId ? { profileId: params.profileId } : {}),
+      },
+      include: { analytics: true, profile: true, assignedUser: true },
+      orderBy: { deadlineAt: "asc" },
+    }),
+    prisma.appSettings.findUnique({ where: { id: "singleton" } }),
+  ]);
+  const overdueStatsResetAt = settings?.overdueStatsResetAt ?? null;
+  const isCountedOverdue = (t: { status: string; deadlineAt: Date }) =>
+    t.status === "OVERDUE" && (!overdueStatsResetAt || t.deadlineAt >= overdueStatsResetAt);
 
   const profiles = await prisma.profile.findMany({ orderBy: { name: "asc" } });
 
   const planned = tasks.length;
   const published = tasks.filter((t) => t.status === "PUBLISHED").length;
-  const overdue = tasks.filter((t) => t.status === "OVERDUE").length;
+  const overdue = tasks.filter(isCountedOverdue).length;
   const completionRate = planned > 0 ? (published / planned) * 100 : 0;
 
   const totals = tasks.reduce(
@@ -389,7 +401,7 @@ export async function getAnalyticsData(params: { year: number; month: number; pr
   const perProfile = profiles.map((profile) => {
     const profileTasks = tasks.filter((t) => t.profileId === profile.id);
     const pub = profileTasks.filter((t) => t.status === "PUBLISHED").length;
-    const ov = profileTasks.filter((t) => t.status === "OVERDUE").length;
+    const ov = profileTasks.filter(isCountedOverdue).length;
     const views = profileTasks.reduce((s, t) => s + (t.analytics?.views ?? 0), 0);
     const reach = profileTasks.reduce((s, t) => s + (t.analytics?.reach ?? 0), 0);
     const likes = profileTasks.reduce((s, t) => s + (t.analytics?.likes ?? 0), 0);
