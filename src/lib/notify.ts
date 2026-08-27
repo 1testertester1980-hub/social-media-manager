@@ -111,6 +111,40 @@ export async function announcePupioMinimumRuleIfNeeded() {
   }
 }
 
+const OVERDUE_PENALTY_ANNOUNCEMENT_TITLE = "Zmena: -5 bodov za Reel po termíne";
+
+/**
+ * One-time announcement that the missed-Reel penalty went from 3 to 5
+ * points, effective 27. 8. 2026 (not retroactive — past misses stay at the
+ * old rate). Covers both the two daily rotation Reels and Pupio's own
+ * minimum-1-Reel/day rule. Idempotent — checked by title, so safe to call
+ * on every page load; only actually sends once per worker.
+ */
+export async function announceOverduePenaltyIncreaseIfNeeded() {
+  const workers = await prisma.user.findMany({ where: { role: "WORKER", active: true } });
+
+  for (const worker of workers) {
+    const already = await prisma.notification.findFirst({
+      where: { userId: worker.id, title: OVERDUE_PENALTY_ANNOUNCEMENT_TITLE },
+    });
+    if (already) continue;
+
+    await createNotification({
+      userId: worker.id,
+      type: "SYSTEM",
+      title: OVERDUE_PENALTY_ANNOUNCEMENT_TITLE,
+      message:
+        "Od 27. 8. 2026 sa za každý nezverejnený Reel po termíne strháva 5 bodov namiesto 3 — platí to pre bežné Reely aj pre Pupio (ak nezverejníš ani jeden Pupio Reel za deň). Staré meškania sa neprepočítavajú, platí len od tohto dátumu ďalej.",
+    });
+
+    await sendTelegramMessage(
+      worker.telegramChatId,
+      `📢 <b>Zmena bodovania</b>\n\n` +
+        `Od <b>27. 8. 2026</b> sa za každý nezverejnený Reel strháva <b>-5 bodov</b> namiesto -3 — platí pre bežné Reely aj pre Pupio. Staré meškania sa neprepočítavajú.`
+    );
+  }
+}
+
 export async function notifyTaskPublished(taskId: string) {
   const task = await prisma.contentTask.findUnique({
     where: { id: taskId },

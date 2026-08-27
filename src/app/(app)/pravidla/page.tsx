@@ -87,9 +87,14 @@ export default async function PravidlaPage() {
           <div className="flex items-center gap-3 rounded-lg bg-red-50 px-3 py-2.5">
             <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" />
             <p className="text-sm text-red-800">
-              <strong>-3 body</strong> za každý Reel, ktorý sa nestihne zverejniť do termínu.
+              <strong>-5 bodov</strong> za každý Reel, ktorý sa nestihne zverejniť do termínu (od
+              27. 8. 2026 — predtým -3 body, staré meškania sa neprepočítavajú spätne).
             </p>
           </div>
+          <p className="text-sm text-slate-500">
+            Postih za nesplnený termín je vyšší ako odmena za splnený — <strong>pravidelnosť je
+            kľúčová</strong>, na nej stojí celý plán rotácie aj dôveryhodnosť profilov.
+          </p>
           <p className="text-sm text-slate-500">
             Svoj aktuálny počet bodov vidíš vždy v sekcii{" "}
             <span className="font-medium text-slate-700">Profil</span>.
@@ -113,7 +118,8 @@ export default async function PravidlaPage() {
             <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" />
             <p className="text-sm text-red-800">
               Od <strong>26. 8. 2026</strong>: ak za daný deň nezverejníš ani jeden Pupio Reel,
-              strhnú sa ti <strong>-3 body</strong>.
+              strhnú sa ti body — <strong>-3</strong> do 26. 8., <strong>-5</strong> od 27. 8. 2026
+              (rovnaká sadzba ako pri bežných Reeloch).
             </p>
           </div>
         </CardContent>

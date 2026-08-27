@@ -109,12 +109,13 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
             <p className="font-semibold text-slate-900">Ako môžeš prísť o peniaze</p>
             <ul className="mt-1 flex flex-col gap-1 text-slate-600">
               <li>
-                • <strong>-3 €</strong> za každý Reel, ktorý sa nestihne zverejniť do termínu
-                (20:00) — tento mesiac: {summary.overdueCount}×.
+                • <strong>-5 €</strong> za každý Reel, ktorý sa nestihne zverejniť do termínu
+                (20:00) — od 27. 8. 2026, predtým -3 €. Pravidelnosť je dôležitá. Tento mesiac:{" "}
+                {summary.overdueCount}×.
               </li>
               <li>
-                • <strong>-3 €</strong> za každý deň (od 26. 8. 2026), kedy nezverejníš ani jeden
-                Pupio Reel — tento mesiac: {summary.pupioMissedDays}×.
+                • Rovnaký postih za každý deň (od 26. 8. 2026), kedy nezverejníš ani jeden Pupio
+                Reel — tento mesiac: {summary.pupioMissedDays}×.
               </li>
             </ul>
           </div>

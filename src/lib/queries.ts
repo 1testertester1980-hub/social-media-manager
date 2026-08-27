@@ -10,24 +10,57 @@ export function monthRange(year: number, month: number) {
 }
 
 const POINTS_PER_PUBLISHED = 3;
-const POINTS_PER_OVERDUE = 3;
 
-/** Pupio has no per-Reel deadline, but at least 1 Reel/day is required from this date on — 0 published that day costs 3 points. */
-const PUPIO_MIN_PENALTY = 3;
+/**
+ * The missed-Reel penalty went from 3 to 5 points, effective 27. 8. 2026 —
+ * not retroactive. A Reel whose deadline fell before that date still costs
+ * only 3 if missed; from that date on it costs 5. Applies uniformly to the
+ * two daily rotation Reels and to Pupio's own minimum-1-Reel/day rule.
+ */
+const POINTS_PER_OVERDUE_OLD = 3;
+const POINTS_PER_OVERDUE_NEW = 5;
+const PENALTY_INCREASE_START = zonedTimeToUtc(2026, 8, 27, 0, 0);
+
+/** Splits an OVERDUE-task count query into pre/post rate-increase buckets and returns the total penalty. */
+async function getOverduePenalty(userId: string, range?: { gte?: Date; lt?: Date }) {
+  const base = { assignedUserId: userId, status: "OVERDUE" as const };
+  const [oldCount, newCount] = await Promise.all([
+    prisma.contentTask.count({
+      where: {
+        ...base,
+        deadlineAt: { gte: range?.gte, lt: range?.lt && range.lt < PENALTY_INCREASE_START ? range.lt : PENALTY_INCREASE_START },
+      },
+    }),
+    prisma.contentTask.count({
+      where: {
+        ...base,
+        deadlineAt: {
+          gte: range?.gte && range.gte > PENALTY_INCREASE_START ? range.gte : PENALTY_INCREASE_START,
+          lt: range?.lt,
+        },
+      },
+    }),
+  ]);
+  return { count: oldCount + newCount, points: oldCount * POINTS_PER_OVERDUE_OLD + newCount * POINTS_PER_OVERDUE_NEW };
+}
+
+/** Pupio has no per-Reel deadline, but at least 1 Reel/day is required from this date on. */
 const PUPIO_MIN_ENFORCEMENT_START = zonedTimeToUtc(2026, 8, 26, 0, 0);
 
 /**
  * Counts how many fully-elapsed days (since PUPIO_MIN_ENFORCEMENT_START) had
  * zero published Pupio Reels for this worker, and returns the resulting
- * point penalty (3 per such day). Computed live from current task status,
+ * point penalty — 3 points/day before the 27. 8. 2026 rate increase, 5
+ * points/day from that date on. Computed live from current task status,
  * same self-correcting approach as the overdue penalty above.
  */
-async function getPupioMinimumPenalty(userId: string) {
+async function getPupioMinimumPenalty(userId: string, range?: { gte?: Date; lt?: Date }) {
+  const rangeStart = range?.gte && range.gte > PUPIO_MIN_ENFORCEMENT_START ? range.gte : PUPIO_MIN_ENFORCEMENT_START;
   const tasks = await prisma.contentTask.findMany({
     where: {
       assignedUserId: userId,
       profile: { qualityTracked: true },
-      deadlineAt: { gte: PUPIO_MIN_ENFORCEMENT_START, lt: new Date() },
+      deadlineAt: { gte: rangeStart, lt: range?.lt && range.lt < new Date() ? range.lt : new Date() },
     },
     select: { deadlineAt: true, status: true },
   });
@@ -38,8 +71,15 @@ async function getPupioMinimumPenalty(userId: string) {
     publishedByDay.set(key, (publishedByDay.get(key) ?? false) || t.status === "PUBLISHED");
   }
 
-  const missedDays = Array.from(publishedByDay.values()).filter((published) => !published).length;
-  return missedDays * PUPIO_MIN_PENALTY;
+  const increaseStartDayKey = tzDayKey(PENALTY_INCREASE_START);
+  let missedDays = 0;
+  let points = 0;
+  for (const [dayKey, published] of publishedByDay) {
+    if (published) continue;
+    missedDays++;
+    points += dayKey >= increaseStartDayKey ? POINTS_PER_OVERDUE_NEW : POINTS_PER_OVERDUE_OLD;
+  }
+  return { missedDays, points };
 }
 
 /** 1 bod = 1 € — motivačný prepočet maximálneho zárobku, nič sa naň nevypláca automaticky. */
@@ -82,27 +122,15 @@ export async function getEarningsSummary(userId: string) {
   const [nowYear, nowMonth, nowDay] = tzDayKey(now).split("-").map(Number);
   const { start: monthStart, end: monthEnd } = monthRange(nowYear, nowMonth);
 
-  const pupioRangeStart =
-    monthStart < PUPIO_MIN_ENFORCEMENT_START ? PUPIO_MIN_ENFORCEMENT_START : monthStart;
-
   const todayStart = zonedTimeToUtc(nowYear, nowMonth, nowDay, 0, 0);
   const todayEnd = new Date(todayStart.getTime() + 86400000);
 
-  const [publishedCount, overdueCount, pupioTasks, todayTasks, maxMonth] = await Promise.all([
+  const [publishedCount, overduePenalty, pupioPenalty, todayTasks, maxMonth] = await Promise.all([
     prisma.contentTask.count({
       where: { assignedUserId: userId, status: "PUBLISHED", deadlineAt: { gte: monthStart, lt: monthEnd } },
     }),
-    prisma.contentTask.count({
-      where: { assignedUserId: userId, status: "OVERDUE", deadlineAt: { gte: monthStart, lt: monthEnd } },
-    }),
-    prisma.contentTask.findMany({
-      where: {
-        assignedUserId: userId,
-        profile: { qualityTracked: true },
-        deadlineAt: { gte: pupioRangeStart, lt: now < monthEnd ? now : monthEnd },
-      },
-      select: { deadlineAt: true, status: true },
-    }),
+    getOverduePenalty(userId, { gte: monthStart, lt: monthEnd }),
+    getPupioMinimumPenalty(userId, { gte: monthStart, lt: monthEnd }),
     prisma.contentTask.findMany({
       where: { assignedUserId: userId, deadlineAt: { gte: todayStart, lt: todayEnd }, status: { not: "CANCELLED" } },
       select: { status: true },
@@ -110,15 +138,11 @@ export async function getEarningsSummary(userId: string) {
     getMaxMonthlyEarnings(nowYear, nowMonth),
   ]);
 
-  const publishedByDay = new Map<string, boolean>();
-  for (const t of pupioTasks) {
-    const key = tzDayKey(t.deadlineAt);
-    publishedByDay.set(key, (publishedByDay.get(key) ?? false) || t.status === "PUBLISHED");
-  }
-  const pupioMissedDays = Array.from(publishedByDay.values()).filter((published) => !published).length;
+  const overdueCount = overduePenalty.count;
+  const pupioMissedDays = pupioPenalty.missedDays;
 
   const earnedPoints = publishedCount * POINTS_PER_PUBLISHED;
-  const lostPoints = overdueCount * POINTS_PER_OVERDUE + pupioMissedDays * PUPIO_MIN_PENALTY;
+  const lostPoints = overduePenalty.points + pupioPenalty.points;
 
   const todayTotal = todayTasks.length;
   const todayDone = todayTasks.filter((t) => t.status === "PUBLISHED").length;
@@ -142,18 +166,19 @@ export async function getEarningsSummary(userId: string) {
 
 /**
  * Worker score: bonusPoints (a manually set starting balance, set by an
- * admin) + 3 per published Reel - 3 per Reel that missed its deadline - 3
- * per day since 26.8.2026 with zero published Pupio Reels, plus the sum of
- * APPROVED adjustment entries (admin penalties, always pre-approved; worker
- * bonus requests only count once an admin approves them). The task-derived
- * parts are computed live from current status (not a stored counter), so
- * they self-correct if an admin later publishes an overdue task.
+ * admin) + 3 per published Reel - the overdue penalty (3/Reel before
+ * 27.8.2026, 5/Reel from that date on) - the Pupio no-Reel-day penalty
+ * (same rate split, since 26.8.2026), plus the sum of APPROVED adjustment
+ * entries (admin penalties, always pre-approved; worker bonus requests only
+ * count once an admin approves them). The task-derived parts are computed
+ * live from current status (not a stored counter), so they self-correct if
+ * an admin later publishes an overdue task.
  */
 export async function getUserPoints(userId: string) {
-  const [user, published, overdue, pupioMinPenalty, adjustments] = await Promise.all([
+  const [user, published, overduePenalty, pupioPenalty, adjustments] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { bonusPoints: true } }),
     prisma.contentTask.count({ where: { assignedUserId: userId, status: "PUBLISHED" } }),
-    prisma.contentTask.count({ where: { assignedUserId: userId, status: "OVERDUE" } }),
+    getOverduePenalty(userId),
     getPupioMinimumPenalty(userId),
     prisma.pointsAdjustment.findMany({
       where: { userId, category: "GENERAL" },
@@ -167,13 +192,15 @@ export async function getUserPoints(userId: string) {
     points:
       bonusPoints +
       published * POINTS_PER_PUBLISHED -
-      overdue * POINTS_PER_OVERDUE -
-      pupioMinPenalty +
+      overduePenalty.points -
+      pupioPenalty.points +
       adjustmentTotal,
     bonusPoints,
     published,
-    overdue,
-    pupioMinPenalty,
+    overdue: overduePenalty.count,
+    overduePenaltyPoints: overduePenalty.points,
+    pupioMinPenalty: pupioPenalty.points,
+    pupioMissedDays: pupioPenalty.missedDays,
     adjustments,
     adjustmentTotal,
   };

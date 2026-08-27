@@ -59,7 +59,7 @@ export default async function AccountPage() {
               <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2">
                 <AlertTriangle className="h-4 w-4 text-red-600" />
                 <span className="text-sm text-red-800">
-                  {score.overdue}× po termíne (-{score.overdue * 3} b.)
+                  {score.overdue}× po termíne (-{score.overduePenaltyPoints} b.)
                 </span>
               </div>
               {score.pupioMinPenalty > 0 && (
@@ -81,8 +81,9 @@ export default async function AccountPage() {
               )}
             </div>
             <p className="text-xs text-slate-400">
-              +3 body za každý včas zverejnený Reel, -3 body za každý, čo sa nestihol. Od 26. 8.
-              2026 aj -3 body za každý deň, kedy nezverejníš aspoň 1 Pupio Reel.
+              +3 body za každý včas zverejnený Reel, -5 body za každý, čo sa nestihol (od 27. 8.
+              2026, predtým -3) — pravidelnosť je dôležitá. Od 26. 8. 2026 aj rovnaký postih za
+              každý deň, kedy nezverejníš aspoň 1 Pupio Reel.
             </p>
           </CardContent>
         </Card>
