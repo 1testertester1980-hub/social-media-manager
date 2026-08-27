@@ -12,6 +12,8 @@ function reelWord(n: number) {
 }
 
 type EarningsSummary = {
+  netPoints: number;
+  netEuros: number;
   earnedEuros: number;
   lostEuros: number;
   overdueCount: number;
@@ -30,17 +32,20 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
   const [showInfo, setShowInfo] = useState(false);
   const pct = summary.maxEuros > 0 ? Math.min(100, Math.round((summary.earnedEuros / summary.maxEuros) * 100)) : 0;
   const hasPendingToday = summary.todayRemaining > 0;
+  const isNegative = summary.netEuros < 0;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-amber-50 p-5 shadow-sm">
       <div className="flex items-center gap-2">
         <Coins className="h-5 w-5 text-emerald-600" />
-        <h2 className="text-sm font-semibold text-slate-900">Tvoj zárobok tento mesiac</h2>
+        <h2 className="text-sm font-semibold text-slate-900">Tvoj zárobok</h2>
       </div>
 
       <div className="mt-3 flex items-baseline gap-2">
-        <span className="text-4xl font-bold text-emerald-700">{summary.earnedEuros} €</span>
-        <span className="text-sm text-slate-500">/ max {summary.maxEuros} €</span>
+        <span className={cn("text-4xl font-bold", isNegative ? "text-red-600" : "text-emerald-700")}>
+          {isNegative ? "" : "+"}
+          {summary.netEuros} €
+        </span>
         <button
           onClick={() => setShowInfo(true)}
           className="ml-1 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-indigo-600"
@@ -49,15 +54,21 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
           <Info className="h-4 w-4" />
         </button>
       </div>
-      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+      <p className="mt-0.5 text-xs text-slate-500">tvoj aktuálny zostatok — 1 bod = 1 €</p>
+
+      <div className="mt-4 flex items-baseline justify-between gap-2 text-xs text-slate-500">
+        <span>Tento mesiac: {summary.earnedEuros} €</span>
+        <span>max {summary.maxEuros} €</span>
+      </div>
+      <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-200">
         <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
       </div>
 
       {summary.lostEuros > 0 && (
         <div className="mt-3 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
           <TrendingDown className="h-4 w-4 shrink-0" />
-          Už si prišiel o <strong>{summary.lostEuros} €</strong> — Reely po termíne alebo bez
-          Pupio.
+          Tento mesiac si už prišiel o <strong>{summary.lostEuros} €</strong> — Reely po termíne
+          alebo bez Pupio.
         </div>
       )}
 
@@ -93,7 +104,19 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
           </div>
 
           <div>
-            <p className="font-semibold text-slate-900">Odkiaľ je max {summary.maxEuros} €</p>
+            <p className="font-semibold text-slate-900">
+              Tvoj zostatok {summary.netEuros} € — čo to je
+            </p>
+            <p className="mt-1 text-slate-600">
+              Tvoj skutočný, aktuálny súčet: +3 body za každý Reel, ktorý si kedy zverejnil, mínus
+              všetky penalizácie za meškanie a chýbajúce Pupio Reely, plus prípadné bonusy alebo
+              manuálne úpravy od admina — spočítané za celý čas, nielen tento mesiac. Presne
+              rovnaké číslo vidíš aj v sekcii <strong>Profil</strong>.
+            </p>
+          </div>
+
+          <div>
+            <p className="font-semibold text-slate-900">Odkiaľ je max {summary.maxEuros} € (tento mesiac)</p>
             <p className="mt-1 text-slate-600">
               Denne máš naplánovaných {summary.reelsPerDay} Reelov (2 z rotácie + 3 na Pupio).
               Každý zverejnený Reel = +3 body. Tento mesiac má {summary.daysInMonth} dní, takže ak

@@ -112,10 +112,14 @@ export async function getMaxMonthlyEarnings(year: number, month: number) {
 }
 
 /**
- * Full earnings picture for the current month, for a motivational banner:
- * how much he's already earned, how much he's already lost (overdue Reels +
- * Pupio no-Reel days), the monthly ceiling, and today's specific stakes —
- * how many Reels are still open today and what they're worth.
+ * Full earnings picture for the motivational banner: the worker's real,
+ * all-time net balance (same number as /account "Moje body" and the admin
+ * dashboard's "Celkové body pracovníkov" — bonus + all published ever,
+ * minus all penalties ever, plus all adjustments ever), plus this month's
+ * breakdown — how much he's already earned, how much he's already lost
+ * (overdue Reels + Pupio no-Reel days), the monthly ceiling, and today's
+ * specific stakes — how many Reels are still open today and what they're
+ * worth.
  */
 export async function getEarningsSummary(userId: string) {
   const now = new Date();
@@ -125,22 +129,24 @@ export async function getEarningsSummary(userId: string) {
   const todayStart = zonedTimeToUtc(nowYear, nowMonth, nowDay, 0, 0);
   const todayEnd = new Date(todayStart.getTime() + 86400000);
 
-  const [publishedCount, overduePenalty, pupioPenalty, todayTasks, maxMonth, monthAdjustments] = await Promise.all([
-    prisma.contentTask.count({
-      where: { assignedUserId: userId, status: "PUBLISHED", deadlineAt: { gte: monthStart, lt: monthEnd } },
-    }),
-    getOverduePenalty(userId, { gte: monthStart, lt: monthEnd }),
-    getPupioMinimumPenalty(userId, { gte: monthStart, lt: monthEnd }),
-    prisma.contentTask.findMany({
-      where: { assignedUserId: userId, deadlineAt: { gte: todayStart, lt: todayEnd }, status: { not: "CANCELLED" } },
-      select: { status: true },
-    }),
-    getMaxMonthlyEarnings(nowYear, nowMonth),
-    prisma.pointsAdjustment.findMany({
-      where: { userId, category: "GENERAL", status: "APPROVED", createdAt: { gte: monthStart, lt: monthEnd } },
-      select: { amount: true },
-    }),
-  ]);
+  const [publishedCount, overduePenalty, pupioPenalty, todayTasks, maxMonth, monthAdjustments, netScore] =
+    await Promise.all([
+      prisma.contentTask.count({
+        where: { assignedUserId: userId, status: "PUBLISHED", deadlineAt: { gte: monthStart, lt: monthEnd } },
+      }),
+      getOverduePenalty(userId, { gte: monthStart, lt: monthEnd }),
+      getPupioMinimumPenalty(userId, { gte: monthStart, lt: monthEnd }),
+      prisma.contentTask.findMany({
+        where: { assignedUserId: userId, deadlineAt: { gte: todayStart, lt: todayEnd }, status: { not: "CANCELLED" } },
+        select: { status: true },
+      }),
+      getMaxMonthlyEarnings(nowYear, nowMonth),
+      prisma.pointsAdjustment.findMany({
+        where: { userId, category: "GENERAL", status: "APPROVED", createdAt: { gte: monthStart, lt: monthEnd } },
+        select: { amount: true },
+      }),
+      getUserPoints(userId),
+    ]);
 
   const overdueCount = overduePenalty.count;
   const pupioMissedDays = pupioPenalty.missedDays;
@@ -159,6 +165,8 @@ export async function getEarningsSummary(userId: string) {
   const todayRemaining = todayTotal - todayDone;
 
   return {
+    netPoints: netScore.points,
+    netEuros: netScore.points * EUR_PER_POINT,
     earnedEuros: earnedPoints * EUR_PER_POINT,
     lostEuros: lostPoints * EUR_PER_POINT,
     overdueCount,
