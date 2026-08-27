@@ -117,6 +117,7 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
                 • Rovnaký postih za každý deň (od 26. 8. 2026), kedy nezverejníš ani jeden Pupio
                 Reel — tento mesiac: {summary.pupioMissedDays}×.
               </li>
+              <li>• Prípadná manuálna penalizácia od admina sa tiež rovno odráta.</li>
             </ul>
           </div>
 

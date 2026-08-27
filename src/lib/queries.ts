@@ -125,7 +125,7 @@ export async function getEarningsSummary(userId: string) {
   const todayStart = zonedTimeToUtc(nowYear, nowMonth, nowDay, 0, 0);
   const todayEnd = new Date(todayStart.getTime() + 86400000);
 
-  const [publishedCount, overduePenalty, pupioPenalty, todayTasks, maxMonth] = await Promise.all([
+  const [publishedCount, overduePenalty, pupioPenalty, todayTasks, maxMonth, monthAdjustments] = await Promise.all([
     prisma.contentTask.count({
       where: { assignedUserId: userId, status: "PUBLISHED", deadlineAt: { gte: monthStart, lt: monthEnd } },
     }),
@@ -136,13 +136,23 @@ export async function getEarningsSummary(userId: string) {
       select: { status: true },
     }),
     getMaxMonthlyEarnings(nowYear, nowMonth),
+    prisma.pointsAdjustment.findMany({
+      where: { userId, category: "GENERAL", status: "APPROVED", createdAt: { gte: monthStart, lt: monthEnd } },
+      select: { amount: true },
+    }),
   ]);
 
   const overdueCount = overduePenalty.count;
   const pupioMissedDays = pupioPenalty.missedDays;
 
-  const earnedPoints = publishedCount * POINTS_PER_PUBLISHED;
-  const lostPoints = overduePenalty.points + pupioPenalty.points;
+  // Manual admin adjustments this month (e.g. a penalty via "Penalizácia") —
+  // positive amounts count as earned, negative amounts as lost, so the
+  // banner always matches the same total shown on /account.
+  const adjustmentBonus = monthAdjustments.filter((a) => a.amount > 0).reduce((s, a) => s + a.amount, 0);
+  const adjustmentPenalty = monthAdjustments.filter((a) => a.amount < 0).reduce((s, a) => s - a.amount, 0);
+
+  const earnedPoints = publishedCount * POINTS_PER_PUBLISHED + adjustmentBonus;
+  const lostPoints = overduePenalty.points + pupioPenalty.points + adjustmentPenalty;
 
   const todayTotal = todayTasks.length;
   const todayDone = todayTasks.filter((t) => t.status === "PUBLISHED").length;

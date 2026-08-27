@@ -86,6 +86,7 @@ export async function addPointsPenalty(userId: string, formData: FormData): Prom
   revalidatePath("/settings/users");
   revalidatePath("/account");
   revalidatePath("/dashboard");
+  revalidatePath("/my-tasks");
   return { ok: true, data: undefined };
 }
 
