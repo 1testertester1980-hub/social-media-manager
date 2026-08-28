@@ -20,7 +20,13 @@ function SubmitButton() {
   );
 }
 
-type Adjustment = { id: string; amount: number; reason: string; createdAt: Date };
+type Adjustment = {
+  id: string;
+  amount: number;
+  reason: string;
+  createdAt: Date;
+  status: "APPROVED" | "PENDING" | "REJECTED";
+};
 
 export function PenaltyDialog({
   userId,
@@ -74,14 +80,31 @@ export function PenaltyDialog({
         {history.length > 0 && (
           <div className="mt-6 border-t border-slate-100 pt-4">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-              História penalizácií
+              História penalizácií a žiadostí
             </p>
+            {history.some((h) => h.status !== "APPROVED") && (
+              <p className="mb-2 text-xs text-slate-400">
+                Do súčtu bodov sa počítajú len schválené položky.
+              </p>
+            )}
             <div className="flex max-h-48 flex-col gap-2 overflow-y-auto">
               {history.map((h) => (
                 <div key={h.id} className="rounded-lg bg-red-50 px-3 py-2 text-sm">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="font-semibold text-red-700">{h.amount} b.</span>
-                    <span className="text-xs text-slate-400">{formatDateTime(h.createdAt)}</span>
+                    <div className="flex items-center gap-2">
+                      {h.status === "PENDING" && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          čaká na schválenie
+                        </span>
+                      )}
+                      {h.status === "REJECTED" && (
+                        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
+                          zamietnuté
+                        </span>
+                      )}
+                      <span className="text-xs text-slate-400">{formatDateTime(h.createdAt)}</span>
+                    </div>
                   </div>
                   <p className="mt-0.5 text-slate-600">{h.reason}</p>
                 </div>

@@ -119,15 +119,32 @@ export default async function AccountPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <MinusCircle className="h-4 w-4 text-red-500" />
-              <CardTitle>Penalizácie</CardTitle>
+              <CardTitle>Penalizácie a žiadosti</CardTitle>
             </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
+            {score.adjustments.some((a) => a.status !== "APPROVED") && (
+              <p className="text-xs text-slate-400">
+                Do súčtu bodov hore sa počítajú len schválené položky.
+              </p>
+            )}
             {score.adjustments.map((a) => (
               <div key={a.id} className="rounded-lg bg-red-50 px-3 py-2 text-sm">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-red-700">{a.amount} b.</span>
-                  <span className="text-xs text-slate-400">{formatDateTime(a.createdAt)}</span>
+                  <div className="flex items-center gap-2">
+                    {a.status === "PENDING" && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                        čaká na schválenie
+                      </span>
+                    )}
+                    {a.status === "REJECTED" && (
+                      <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        zamietnuté
+                      </span>
+                    )}
+                    <span className="text-xs text-slate-400">{formatDateTime(a.createdAt)}</span>
+                  </div>
                 </div>
                 <p className="mt-0.5 text-slate-600">{a.reason}</p>
               </div>
