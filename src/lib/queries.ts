@@ -50,14 +50,15 @@ async function getPublishedPoints(userId: string, range?: { gte?: Date; lt?: Dat
   ]);
 
   const pupioCount = pupioOldCount + pupioNewCount;
+  const regularPoints = regularCount * POINTS_PER_PUBLISHED;
+  const pupioPoints = pupioOldCount * POINTS_PER_PUBLISHED_PUPIO_OLD + pupioNewCount * POINTS_PER_PUBLISHED_PUPIO_NEW;
   return {
     regularCount,
     pupioCount,
     count: regularCount + pupioCount,
-    points:
-      regularCount * POINTS_PER_PUBLISHED +
-      pupioOldCount * POINTS_PER_PUBLISHED_PUPIO_OLD +
-      pupioNewCount * POINTS_PER_PUBLISHED_PUPIO_NEW,
+    regularPoints,
+    pupioPoints,
+    points: regularPoints + pupioPoints,
   };
 }
 
@@ -278,7 +279,9 @@ export async function getUserPoints(userId: string) {
     bonusPoints,
     published: publishedPoints.count,
     publishedRegular: publishedPoints.regularCount,
+    publishedRegularPoints: publishedPoints.regularPoints,
     publishedPupio: publishedPoints.pupioCount,
+    publishedPupioPoints: publishedPoints.pupioPoints,
     publishedPoints: publishedPoints.points,
     overdue: overduePenalty.count,
     overduePenaltyPoints: overduePenalty.points,

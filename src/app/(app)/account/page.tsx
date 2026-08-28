@@ -53,13 +53,13 @@ export default async function AccountPage() {
               <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 <span className="text-sm text-emerald-800">
-                  {score.publishedRegular}× zverejnené (+{score.publishedRegular * 3} b.)
+                  {score.publishedRegular}× zverejnené (+{score.publishedRegularPoints} b.)
                 </span>
               </div>
               <div className="flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2">
                 <Gem className="h-4 w-4 text-purple-500" />
                 <span className="text-sm text-purple-800">
-                  {score.publishedPupio}× Pupio (+{score.publishedPupio} b.)
+                  {score.publishedPupio}× Pupio (+{score.publishedPupioPoints} b.)
                 </span>
               </div>
               <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2">
