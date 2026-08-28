@@ -3,7 +3,11 @@ import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { syncOverdueTasks } from "@/lib/overdue";
 import { generateDailyTasks } from "@/lib/rotation";
-import { announcePupioMinimumRuleIfNeeded, announceOverduePenaltyIncreaseIfNeeded } from "@/lib/notify";
+import {
+  announcePupioMinimumRuleIfNeeded,
+  announceOverduePenaltyIncreaseIfNeeded,
+  announcePupioPublishRateChangeIfNeeded,
+} from "@/lib/notify";
 import { Sidebar } from "@/components/layout/sidebar";
 import { AppHeader } from "@/components/layout/header";
 
@@ -15,6 +19,7 @@ export default async function AppShellLayout({ children }: { children: React.Rea
   await syncOverdueTasks();
   await announcePupioMinimumRuleIfNeeded();
   await announceOverduePenaltyIncreaseIfNeeded();
+  await announcePupioPublishRateChangeIfNeeded();
 
   const unreadCount = await prisma.notification.count({
     where: { userId: user.id, read: false },

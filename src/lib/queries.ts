@@ -9,7 +9,57 @@ export function monthRange(year: number, month: number) {
   return { start, end };
 }
 
+/**
+ * Regular rotation Reels earn 3 points each. Pupio Reels earned 3 points too
+ * (same as everything else) until PUPIO_PUBLISH_RATE_START — from then on,
+ * only 1 (Pupio has no deadline and no per-Reel quality decision built into
+ * this base rate; the separate, admin-decided Pupio-quality pool is a bonus
+ * on top). Not retroactive: a Pupio Reel already published before the
+ * cutoff keeps its 3 points.
+ */
 const POINTS_PER_PUBLISHED = 3;
+const POINTS_PER_PUBLISHED_PUPIO_OLD = 3;
+const POINTS_PER_PUBLISHED_PUPIO_NEW = 1;
+const PUPIO_PUBLISH_RATE_START = zonedTimeToUtc(2026, 8, 28, 0, 0);
+
+/** Splits a PUBLISHED-task count into a regular bucket (always 3 b.) and a Pupio bucket, itself split into pre/post rate-cut buckets, and returns the combined point total. */
+async function getPublishedPoints(userId: string, range?: { gte?: Date; lt?: Date }) {
+  const baseRegular = { assignedUserId: userId, status: "PUBLISHED" as const, profile: { qualityTracked: false } };
+  const basePupio = { assignedUserId: userId, status: "PUBLISHED" as const, profile: { qualityTracked: true } };
+
+  const [regularCount, pupioOldCount, pupioNewCount] = await Promise.all([
+    prisma.contentTask.count({ where: { ...baseRegular, deadlineAt: { gte: range?.gte, lt: range?.lt } } }),
+    prisma.contentTask.count({
+      where: {
+        ...basePupio,
+        deadlineAt: {
+          gte: range?.gte,
+          lt: range?.lt && range.lt < PUPIO_PUBLISH_RATE_START ? range.lt : PUPIO_PUBLISH_RATE_START,
+        },
+      },
+    }),
+    prisma.contentTask.count({
+      where: {
+        ...basePupio,
+        deadlineAt: {
+          gte: range?.gte && range.gte > PUPIO_PUBLISH_RATE_START ? range.gte : PUPIO_PUBLISH_RATE_START,
+          lt: range?.lt,
+        },
+      },
+    }),
+  ]);
+
+  const pupioCount = pupioOldCount + pupioNewCount;
+  return {
+    regularCount,
+    pupioCount,
+    count: regularCount + pupioCount,
+    points:
+      regularCount * POINTS_PER_PUBLISHED +
+      pupioOldCount * POINTS_PER_PUBLISHED_PUPIO_OLD +
+      pupioNewCount * POINTS_PER_PUBLISHED_PUPIO_NEW,
+  };
+}
 
 /**
  * The missed-Reel penalty went from 3 to 5 points, effective 27. 8. 2026 —
@@ -87,28 +137,41 @@ const EUR_PER_POINT = 1;
 
 /**
  * Best-case monthly earnings if every single scheduled Reel that month gets
- * published on time: (weekday-rotation Reels/day + active fixed-count
- * profiles' Reels/day, e.g. Pupio) × 3 body × days in month × 1 €/bod.
- * Derived from the live schedule config, not hardcoded, so it stays correct
- * if the rotation or Pupio's daily count ever changes.
+ * published on time: weekday-rotation Reels/day × 3 body + active
+ * fixed-count profiles' Reels/day (e.g. Pupio) × 1 bod, × days in month ×
+ * 1 €/bod. Derived from the live schedule config, not hardcoded, so it
+ * stays correct if the rotation, Pupio's daily count, or which profiles
+ * count as "Pupio-rate" (qualityTracked) ever changes.
  */
 export async function getMaxMonthlyEarnings(year: number, month: number) {
   const fixedCountProfiles = await prisma.profile.findMany({
     where: { active: true, dailyReelCount: { gt: 0 } },
-    select: { dailyReelCount: true },
+    select: { dailyReelCount: true, qualityTracked: true },
   });
   const fixedReelsPerDay = fixedCountProfiles.reduce((sum, p) => sum + p.dailyReelCount, 0);
+  const fixedPointsPerDay = fixedCountProfiles.reduce(
+    (sum, p) => sum + p.dailyReelCount * (p.qualityTracked ? POINTS_PER_PUBLISHED_PUPIO_NEW : POINTS_PER_PUBLISHED),
+    0
+  );
 
   const daysInMonth = new Date(year, month, 0).getDate();
   let totalReels = 0;
+  let maxPoints = 0;
   for (let day = 1; day <= daysInMonth; day++) {
     const weekday = new Date(year, month - 1, day).getDay();
     const rotationReels = (WEEKDAY_ROTATION[weekday] ?? []).length;
     totalReels += rotationReels + fixedReelsPerDay;
+    maxPoints += rotationReels * POINTS_PER_PUBLISHED + fixedPointsPerDay;
   }
 
-  const maxPoints = totalReels * POINTS_PER_PUBLISHED;
-  return { maxPoints, maxEuros: maxPoints * EUR_PER_POINT, daysInMonth, totalReels };
+  return {
+    maxPoints,
+    maxEuros: maxPoints * EUR_PER_POINT,
+    daysInMonth,
+    totalReels,
+    rotationReelsPerDay: WEEKDAY_ROTATION[0]?.length ?? 2,
+    pupioReelsPerDay: fixedReelsPerDay,
+  };
 }
 
 /**
@@ -129,16 +192,14 @@ export async function getEarningsSummary(userId: string) {
   const todayStart = zonedTimeToUtc(nowYear, nowMonth, nowDay, 0, 0);
   const todayEnd = new Date(todayStart.getTime() + 86400000);
 
-  const [publishedCount, overduePenalty, pupioPenalty, todayTasks, maxMonth, monthAdjustments, netScore] =
+  const [publishedPoints, overduePenalty, pupioPenalty, todayTasks, maxMonth, monthAdjustments, netScore] =
     await Promise.all([
-      prisma.contentTask.count({
-        where: { assignedUserId: userId, status: "PUBLISHED", deadlineAt: { gte: monthStart, lt: monthEnd } },
-      }),
+      getPublishedPoints(userId, { gte: monthStart, lt: monthEnd }),
       getOverduePenalty(userId, { gte: monthStart, lt: monthEnd }),
       getPupioMinimumPenalty(userId, { gte: monthStart, lt: monthEnd }),
       prisma.contentTask.findMany({
         where: { assignedUserId: userId, deadlineAt: { gte: todayStart, lt: todayEnd }, status: { not: "CANCELLED" } },
-        select: { status: true },
+        select: { status: true, profile: { select: { qualityTracked: true } } },
       }),
       getMaxMonthlyEarnings(nowYear, nowMonth),
       prisma.pointsAdjustment.findMany({
@@ -157,12 +218,15 @@ export async function getEarningsSummary(userId: string) {
   const adjustmentBonus = monthAdjustments.filter((a) => a.amount > 0).reduce((s, a) => s + a.amount, 0);
   const adjustmentPenalty = monthAdjustments.filter((a) => a.amount < 0).reduce((s, a) => s - a.amount, 0);
 
-  const earnedPoints = publishedCount * POINTS_PER_PUBLISHED + adjustmentBonus;
+  const earnedPoints = publishedPoints.points + adjustmentBonus;
   const lostPoints = overduePenalty.points + pupioPenalty.points + adjustmentPenalty;
 
   const todayTotal = todayTasks.length;
   const todayDone = todayTasks.filter((t) => t.status === "PUBLISHED").length;
   const todayRemaining = todayTotal - todayDone;
+  const todayRemainingPoints = todayTasks
+    .filter((t) => t.status !== "PUBLISHED")
+    .reduce((sum, t) => sum + (t.profile.qualityTracked ? POINTS_PER_PUBLISHED_PUPIO_NEW : POINTS_PER_PUBLISHED), 0);
 
   return {
     netPoints: netScore.points,
@@ -175,27 +239,30 @@ export async function getEarningsSummary(userId: string) {
     daysInMonth: maxMonth.daysInMonth,
     totalReelsMonth: maxMonth.totalReels,
     reelsPerDay: maxMonth.daysInMonth > 0 ? Math.round(maxMonth.totalReels / maxMonth.daysInMonth) : 0,
+    rotationReelsPerDay: maxMonth.rotationReelsPerDay,
+    pupioReelsPerDay: maxMonth.pupioReelsPerDay,
     todayTotal,
     todayDone,
     todayRemaining,
-    todayRemainingEuros: todayRemaining * POINTS_PER_PUBLISHED * EUR_PER_POINT,
+    todayRemainingEuros: todayRemainingPoints * EUR_PER_POINT,
   };
 }
 
 /**
  * Worker score: bonusPoints (a manually set starting balance, set by an
- * admin) + 3 per published Reel - the overdue penalty (3/Reel before
- * 27.8.2026, 5/Reel from that date on) - the Pupio no-Reel-day penalty
- * (same rate split, since 26.8.2026), plus the sum of APPROVED adjustment
- * entries (admin penalties, always pre-approved; worker bonus requests only
- * count once an admin approves them). The task-derived parts are computed
- * live from current status (not a stored counter), so they self-correct if
- * an admin later publishes an overdue task.
+ * admin) + 3 per published regular Reel + 1 per published Pupio Reel - the
+ * overdue penalty (3/Reel before 27.8.2026, 5/Reel from that date on) - the
+ * Pupio no-Reel-day penalty (same rate split, since 26.8.2026), plus the sum
+ * of APPROVED adjustment entries (admin penalties, always pre-approved;
+ * worker bonus requests only count once an admin approves them). The
+ * task-derived parts are computed live from current status (not a stored
+ * counter), so they self-correct if an admin later publishes an overdue
+ * task.
  */
 export async function getUserPoints(userId: string) {
-  const [user, published, overduePenalty, pupioPenalty, adjustments] = await Promise.all([
+  const [user, publishedPoints, overduePenalty, pupioPenalty, adjustments] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { bonusPoints: true } }),
-    prisma.contentTask.count({ where: { assignedUserId: userId, status: "PUBLISHED" } }),
+    getPublishedPoints(userId),
     getOverduePenalty(userId),
     getPupioMinimumPenalty(userId),
     prisma.pointsAdjustment.findMany({
@@ -207,14 +274,12 @@ export async function getUserPoints(userId: string) {
   const approved = adjustments.filter((a) => a.status === "APPROVED");
   const adjustmentTotal = approved.reduce((sum, a) => sum + a.amount, 0);
   return {
-    points:
-      bonusPoints +
-      published * POINTS_PER_PUBLISHED -
-      overduePenalty.points -
-      pupioPenalty.points +
-      adjustmentTotal,
+    points: bonusPoints + publishedPoints.points - overduePenalty.points - pupioPenalty.points + adjustmentTotal,
     bonusPoints,
-    published,
+    published: publishedPoints.count,
+    publishedRegular: publishedPoints.regularCount,
+    publishedPupio: publishedPoints.pupioCount,
+    publishedPoints: publishedPoints.points,
     overdue: overduePenalty.count,
     overduePenaltyPoints: overduePenalty.points,
     pupioMinPenalty: pupioPenalty.points,

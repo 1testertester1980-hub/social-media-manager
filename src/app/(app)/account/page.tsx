@@ -53,7 +53,13 @@ export default async function AccountPage() {
               <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 <span className="text-sm text-emerald-800">
-                  {score.published}× zverejnené (+{score.published * 3} b.)
+                  {score.publishedRegular}× zverejnené (+{score.publishedRegular * 3} b.)
+                </span>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2">
+                <Gem className="h-4 w-4 text-purple-500" />
+                <span className="text-sm text-purple-800">
+                  {score.publishedPupio}× Pupio (+{score.publishedPupio} b.)
                 </span>
               </div>
               <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2">
@@ -81,9 +87,9 @@ export default async function AccountPage() {
               )}
             </div>
             <p className="text-xs text-slate-400">
-              +3 body za každý včas zverejnený Reel, -5 body za každý, čo sa nestihol (od 27. 8.
-              2026, predtým -3) — pravidelnosť je dôležitá. Od 26. 8. 2026 aj rovnaký postih za
-              každý deň, kedy nezverejníš aspoň 1 Pupio Reel.
+              +3 body za každý včas zverejnený bežný Reel, +1 bod za každý Pupio Reel, -5 body za
+              každý, čo sa nestihol (od 27. 8. 2026, predtým -3) — pravidelnosť je dôležitá. Od
+              26. 8. 2026 aj rovnaký postih za každý deň, kedy nezverejníš aspoň 1 Pupio Reel.
             </p>
           </CardContent>
         </Card>
@@ -101,8 +107,8 @@ export default async function AccountPage() {
             <p className="text-4xl font-bold text-emerald-700">{maxEarnings.maxEuros} €</p>
             <p className="text-sm text-slate-600">
               Ak zverejníš úplne <strong>každý</strong> naplánovaný Reel v {MONTH_NAMES_SK[nowMonth - 1]} —{" "}
-              {maxEarnings.totalReels} Reelov × 3 body — získaš až {maxEarnings.maxPoints} bodov.
-              1 bod = 1 €.
+              {maxEarnings.rotationReelsPerDay} bežné Reely/deň á 3 body + {maxEarnings.pupioReelsPerDay} Pupio
+              Reely/deň á 1 bod — získaš až {maxEarnings.maxPoints} bodov. 1 bod = 1 €.
             </p>
           </CardContent>
         </Card>

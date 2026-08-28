@@ -145,6 +145,41 @@ export async function announceOverduePenaltyIncreaseIfNeeded() {
   }
 }
 
+const PUPIO_PUBLISH_RATE_ANNOUNCEMENT_TITLE = "Zmena: Pupio Reely teraz za 1 bod";
+
+/**
+ * One-time announcement that Pupio Reels now earn only 1 point when
+ * published (instead of 3, same as everything else), effective 28. 8. 2026
+ * and not retroactive — Pupio Reels already published keep their 3 points.
+ * The separate Pupio-quality bonus pool is unaffected. Idempotent — checked
+ * by title, so safe to call on every page load; only actually sends once
+ * per worker.
+ */
+export async function announcePupioPublishRateChangeIfNeeded() {
+  const workers = await prisma.user.findMany({ where: { role: "WORKER", active: true } });
+
+  for (const worker of workers) {
+    const already = await prisma.notification.findFirst({
+      where: { userId: worker.id, title: PUPIO_PUBLISH_RATE_ANNOUNCEMENT_TITLE },
+    });
+    if (already) continue;
+
+    await createNotification({
+      userId: worker.id,
+      type: "SYSTEM",
+      title: PUPIO_PUBLISH_RATE_ANNOUNCEMENT_TITLE,
+      message:
+        "Od 28. 8. 2026 zverejnený Pupio Reel prináša 1 bod namiesto 3 (bežné Reely z rotácie ostávajú na 3 bodoch). Staré, už zverejnené Pupio Reely sa neprepočítavajú. Kvalitné body za Pupio (samostatný, admin rozhoduje) sa tým nemenia — sú navyše.",
+    });
+
+    await sendTelegramMessage(
+      worker.telegramChatId,
+      `📢 <b>Zmena bodovania</b>\n\n` +
+        `Od <b>28. 8. 2026</b> zverejnený Pupio Reel prináša <b>1 bod</b> namiesto 3 — bežné Reely z rotácie ostávajú na 3 bodoch. Staré Pupio Reely sa neprepočítavajú. Pupio kvalita body (navyše, rozhoduje admin) sa nemenia.`
+    );
+  }
+}
+
 export async function notifyTaskPublished(taskId: string) {
   const task = await prisma.contentTask.findUnique({
     where: { id: taskId },

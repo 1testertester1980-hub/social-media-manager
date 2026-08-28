@@ -22,6 +22,8 @@ type EarningsSummary = {
   daysInMonth: number;
   totalReelsMonth: number;
   reelsPerDay: number;
+  rotationReelsPerDay: number;
+  pupioReelsPerDay: number;
   todayTotal: number;
   todayDone: number;
   todayRemaining: number;
@@ -108,23 +110,23 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
               Tvoj zostatok {summary.netEuros} € — čo to je
             </p>
             <p className="mt-1 text-slate-600">
-              Tvoj skutočný, aktuálny súčet: +3 body za každý Reel, ktorý si kedy zverejnil, mínus
-              všetky penalizácie za meškanie a chýbajúce Pupio Reely, plus prípadné bonusy alebo
-              manuálne úpravy od admina — spočítané za celý čas, nielen tento mesiac. Presne
-              rovnaké číslo vidíš aj v sekcii <strong>Profil</strong>.
+              Tvoj skutočný, aktuálny súčet: +3 body za každý zverejnený bežný Reel, +1 bod za
+              každý Pupio Reel, mínus všetky penalizácie za meškanie a chýbajúce Pupio Reely, plus
+              prípadné bonusy alebo manuálne úpravy od admina — spočítané za celý čas, nielen
+              tento mesiac. Presne rovnaké číslo vidíš aj v sekcii <strong>Profil</strong>.
             </p>
           </div>
 
           <div>
             <p className="font-semibold text-slate-900">Odkiaľ je max {summary.maxEuros} € (tento mesiac)</p>
             <p className="mt-1 text-slate-600">
-              Denne máš naplánovaných {summary.reelsPerDay} Reelov (2 z rotácie + 3 na Pupio).
-              Každý zverejnený Reel = +3 body. Tento mesiac má {summary.daysInMonth} dní, takže ak
-              by si zverejnil úplne všetko:
+              Denne máš naplánovaných {summary.rotationReelsPerDay} Reely z rotácie (á 3 body) a{" "}
+              {summary.pupioReelsPerDay} Pupio Reely (á 1 bod). Tento mesiac má {summary.daysInMonth}{" "}
+              dní, takže ak by si zverejnil úplne všetko:
             </p>
             <p className="mt-1.5 rounded-lg bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700">
-              {summary.reelsPerDay} Reelov × {summary.daysInMonth} dní = {summary.totalReelsMonth}{" "}
-              Reelov × 3 body = {summary.maxEuros} b. = {summary.maxEuros} €
+              ({summary.rotationReelsPerDay} × 3 b. + {summary.pupioReelsPerDay} × 1 b.) ×{" "}
+              {summary.daysInMonth} dní = {summary.maxEuros} b. = {summary.maxEuros} €
             </p>
           </div>
 
@@ -148,8 +150,8 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
             <p className="font-semibold text-slate-900">Dnešok</p>
             <p className="mt-1 text-slate-600">
               Dnes máš naplánovaných {summary.todayTotal} Reelov, {summary.todayDone} už hotových.
-              Zvyšných {summary.todayRemaining} × 3 € = {summary.todayRemainingEuros} € je ešte na
-              stole.
+              Zvyšných {summary.todayRemaining} (bežné Reely á 3 body, Pupio á 1 bod) je spolu ešte{" "}
+              {summary.todayRemainingEuros} € na stole.
             </p>
           </div>
         </div>

@@ -81,7 +81,8 @@ export default async function PravidlaPage() {
           <div className="flex items-center gap-3 rounded-lg bg-emerald-50 px-3 py-2.5">
             <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
             <p className="text-sm text-emerald-800">
-              <strong>+3 body</strong> za každý Reel, ktorý zverejníš včas (pred termínom).
+              <strong>+3 body</strong> za každý bežný Reel (z dennej rotácie), ktorý zverejníš
+              včas (pred termínom). Pupio Reely majú vlastnú, nižšiu sadzbu — pozri nižšie.
             </p>
           </div>
           <div className="flex items-center gap-3 rounded-lg bg-red-50 px-3 py-2.5">
@@ -114,6 +115,14 @@ export default async function PravidlaPage() {
             Pupio nemá pevný termín na jednotlivé Reely, takže nemôže byť &bdquo;po termíne&ldquo;. Platí ale
             jedno pravidlo: <strong>aspoň 1 Pupio Reel musíš zverejniť každý deň.</strong>
           </p>
+          <div className="flex items-center gap-3 rounded-lg bg-emerald-50 px-3 py-2.5">
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+            <p className="text-sm text-emerald-800">
+              <strong>+1 bod</strong> za každý zverejnený Pupio Reel (namiesto +3 ako pri bežných
+              Reeloch) — Pupio nemá termín, takže je to nižšia sadzba. Kvalita Pupio Reelu sa
+              odmeňuje samostatne, navyše, v sekcii <strong>Pupio kvalita</strong>.
+            </p>
+          </div>
           <div className="flex items-center gap-3 rounded-lg bg-red-50 px-3 py-2.5">
             <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" />
             <p className="text-sm text-red-800">
