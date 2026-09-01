@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Coins, Flame, TrendingDown, Info } from "lucide-react";
+import { Coins, Flame, TrendingDown, TrendingUp, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Dialog } from "@/components/ui/dialog";
 
@@ -28,6 +28,7 @@ type EarningsSummary = {
   todayDone: number;
   todayRemaining: number;
   todayRemainingEuros: number;
+  projectedMonthEndEuros: number;
 };
 
 export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
@@ -64,6 +65,14 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
       </div>
       <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-200">
         <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+      </div>
+
+      <div className="mt-3 flex items-center gap-3 rounded-xl bg-indigo-50 px-4 py-3">
+        <TrendingUp className="h-6 w-6 shrink-0 text-indigo-600" />
+        <p className="text-sm font-semibold text-indigo-900">
+          Ak od teraz vydáš <strong>každý deň všetky Reely</strong>, na konci mesiaca budeš mať{" "}
+          <strong>{summary.projectedMonthEndEuros} €</strong>.
+        </p>
       </div>
 
       {summary.lostEuros > 0 && (
@@ -127,6 +136,18 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
             <p className="mt-1.5 rounded-lg bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700">
               ({summary.rotationReelsPerDay} × 3 b. + {summary.pupioReelsPerDay} × 1 b.) ×{" "}
               {summary.daysInMonth} dní = {summary.maxEuros} b. = {summary.maxEuros} €
+            </p>
+          </div>
+
+          <div>
+            <p className="font-semibold text-slate-900">
+              Odhad na koniec mesiaca: {summary.projectedMonthEndEuros} €
+            </p>
+            <p className="mt-1 text-slate-600">
+              Tvoj aktuálny zostatok ({summary.netEuros} €) + čo ešte môžeš dnes získať + čo môžeš
+              získať každý ďalší deň do konca mesiaca, ak odteraz zverejníš úplne všetko na čas —
+              žiadne ďalšie meškania ani chýbajúce Pupio dni. Je to reálny odhad, nie teoretické
+              maximum od 1. dňa mesiaca (to je to {summary.maxEuros} € vyššie).
             </p>
           </div>
 

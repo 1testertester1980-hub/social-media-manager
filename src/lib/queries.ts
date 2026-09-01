@@ -176,14 +176,43 @@ export async function getMaxMonthlyEarnings(year: number, month: number) {
 }
 
 /**
+ * Points on offer for every full day from `fromDay` through the end of the
+ * month (i.e. NOT including today — today's own leftover potential is
+ * computed separately from its actual remaining tasks). Always priced at
+ * the current rates (3/regular Reel, 1/Pupio Reel), since any day in this
+ * range is still in the future relative to the last rate change.
+ */
+async function getRemainingMonthPoints(year: number, month: number, fromDay: number) {
+  const fixedCountProfiles = await prisma.profile.findMany({
+    where: { active: true, dailyReelCount: { gt: 0 } },
+    select: { dailyReelCount: true, qualityTracked: true },
+  });
+  const fixedPointsPerDay = fixedCountProfiles.reduce(
+    (sum, p) => sum + p.dailyReelCount * (p.qualityTracked ? POINTS_PER_PUBLISHED_PUPIO_NEW : POINTS_PER_PUBLISHED),
+    0
+  );
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  let points = 0;
+  for (let day = fromDay; day <= daysInMonth; day++) {
+    const weekday = new Date(year, month - 1, day).getDay();
+    const rotationReels = (WEEKDAY_ROTATION[weekday] ?? []).length;
+    points += rotationReels * POINTS_PER_PUBLISHED + fixedPointsPerDay;
+  }
+  return points;
+}
+
+/**
  * Full earnings picture for the motivational banner: the worker's real,
  * all-time net balance (same number as /account "Moje body" and the admin
  * dashboard's "Celkové body pracovníkov" — bonus + all published ever,
  * minus all penalties ever, plus all adjustments ever), plus this month's
  * breakdown — how much he's already earned, how much he's already lost
- * (overdue Reels + Pupio no-Reel days), the monthly ceiling, and today's
+ * (overdue Reels + Pupio no-Reel days), the monthly ceiling, today's
  * specific stakes — how many Reels are still open today and what they're
- * worth.
+ * worth — and a realistic month-end projection: his current balance, plus
+ * what's still achievable today, plus every remaining day this month, if he
+ * publishes everything on time from here on (no more misses).
  */
 export async function getEarningsSummary(userId: string) {
   const now = new Date();
@@ -193,7 +222,7 @@ export async function getEarningsSummary(userId: string) {
   const todayStart = zonedTimeToUtc(nowYear, nowMonth, nowDay, 0, 0);
   const todayEnd = new Date(todayStart.getTime() + 86400000);
 
-  const [publishedPoints, overduePenalty, pupioPenalty, todayTasks, maxMonth, monthAdjustments, netScore] =
+  const [publishedPoints, overduePenalty, pupioPenalty, todayTasks, maxMonth, monthAdjustments, netScore, remainingMonthPoints] =
     await Promise.all([
       getPublishedPoints(userId, { gte: monthStart, lt: monthEnd }),
       getOverduePenalty(userId, { gte: monthStart, lt: monthEnd }),
@@ -208,6 +237,7 @@ export async function getEarningsSummary(userId: string) {
         select: { amount: true },
       }),
       getUserPoints(userId),
+      getRemainingMonthPoints(nowYear, nowMonth, nowDay + 1),
     ]);
 
   const overdueCount = overduePenalty.count;
@@ -229,6 +259,13 @@ export async function getEarningsSummary(userId: string) {
     .filter((t) => t.status !== "PUBLISHED")
     .reduce((sum, t) => sum + (t.profile.qualityTracked ? POINTS_PER_PUBLISHED_PUPIO_NEW : POINTS_PER_PUBLISHED), 0);
 
+  // Realistic month-end projection: his real current balance, plus what's
+  // still winnable today, plus every remaining day this month — i.e. "if I
+  // publish everything on time from this moment on, what will I have by
+  // 30./31.?" Not the theoretical from-day-1 ceiling (maxEuros), which
+  // ignores days already gone.
+  const projectedMonthEndPoints = netScore.points + todayRemainingPoints + remainingMonthPoints;
+
   return {
     netPoints: netScore.points,
     netEuros: netScore.points * EUR_PER_POINT,
@@ -246,6 +283,7 @@ export async function getEarningsSummary(userId: string) {
     todayDone,
     todayRemaining,
     todayRemainingEuros: todayRemainingPoints * EUR_PER_POINT,
+    projectedMonthEndEuros: projectedMonthEndPoints * EUR_PER_POINT,
   };
 }
 
