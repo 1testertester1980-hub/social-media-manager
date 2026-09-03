@@ -127,7 +127,7 @@ export default async function PravidlaPage() {
             <p className="text-sm text-emerald-800">
               <strong>Jednoduchý, bez odpočítavania</strong> — zverejníš oba bežné Reely za jeden
               deň = +3 body dokopy. Nezverejníš oba = 0 b. za ten deň, ale <strong>nikdy sa nič
-              nestrháva</strong>. Prechodom začínaš s +15 bodmi — čistý, povzbudivý štart.
+              nestrháva</strong>. Prechodom sa nič neresetuje — pokračuješ tam, kde si skončil.
             </p>
           </div>
           <p className="text-sm text-slate-500">Kedykoľvek sa môžeš vrátiť späť na plný systém.</p>

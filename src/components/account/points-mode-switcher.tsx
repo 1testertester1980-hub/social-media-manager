@@ -37,9 +37,7 @@ export function PointsModeSwitcher({ current }: { current: "STANDARD" | "SIMPLE"
     setBusy(false);
     setConfirmTarget(null);
     if (result.ok) {
-      toast.success(
-        mode === "SIMPLE" ? "Prepnuté na jednoduchý režim — začínaš s +15 bodmi." : "Prepnuté na plný systém."
-      );
+      toast.success(mode === "SIMPLE" ? "Prepnuté na jednoduchý režim." : "Prepnuté na plný systém.");
       router.refresh();
     } else {
       toast.error(result.error);
@@ -81,17 +79,17 @@ export function PointsModeSwitcher({ current }: { current: "STANDARD" | "SIMPLE"
 
       <Dialog open={confirmTarget === "SIMPLE"} onClose={() => setConfirmTarget(null)} title="Prepnúť na jednoduchý režim?">
         <p className="mb-5 text-sm text-slate-600">
-          Tvoj zostatok sa nastaví na <strong>+15 bodov</strong> — čistý, povzbudivý štart. Od
-          tohto momentu za 2 bežné Reely denne dostaneš +3 body dokopy a nikdy sa ti za ne nič
-          nestrhne. Pupio ostáva úplne rovnaké (1 bod/Reel, pravidlo 1 Reelu denne). Kedykoľvek sa
-          môžeš vrátiť späť na plný systém.
+          Tvoje body zostávajú tam, kde sú — <strong>žiadny reset</strong>. Mení sa len to, ako sa
+          rátajú ďalej: od tohto momentu za 2 bežné Reely denne dostaneš +3 body dokopy a nikdy sa
+          ti za ne nič nestrhne. Pupio ostáva úplne rovnaké (1 bod/Reel, pravidlo 1 Reelu denne).
+          Kedykoľvek sa môžeš vrátiť späť na plný systém.
         </p>
         <div className="flex justify-end gap-3">
           <Button variant="outline" onClick={() => setConfirmTarget(null)}>
             Späť
           </Button>
           <Button loading={busy} onClick={() => apply("SIMPLE")}>
-            Prepnúť a začať s +15 b.
+            Prepnúť na jednoduchý režim
           </Button>
         </div>
       </Dialog>
