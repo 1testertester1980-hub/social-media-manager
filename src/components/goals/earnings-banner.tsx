@@ -12,6 +12,7 @@ function reelWord(n: number) {
 }
 
 type EarningsSummary = {
+  pointsMode: "STANDARD" | "SIMPLE";
   netPoints: number;
   netEuros: number;
   earnedEuros: number;
@@ -33,6 +34,7 @@ type EarningsSummary = {
 
 export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
   const [showInfo, setShowInfo] = useState(false);
+  const isSimple = summary.pointsMode === "SIMPLE";
   const pct = summary.maxEuros > 0 ? Math.min(100, Math.round((summary.earnedEuros / summary.maxEuros) * 100)) : 0;
   const hasPendingToday = summary.todayRemaining > 0;
   const isNegative = summary.netEuros < 0;
@@ -42,6 +44,11 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
       <div className="flex items-center gap-2">
         <Coins className="h-5 w-5 text-emerald-600" />
         <h2 className="text-sm font-semibold text-slate-900">Tvoj zárobok</h2>
+        {isSimple && (
+          <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
+            jednoduchý režim
+          </span>
+        )}
       </div>
 
       <div className="mt-3 flex items-baseline gap-2">
@@ -78,8 +85,8 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
       {summary.lostEuros > 0 && (
         <div className="mt-3 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
           <TrendingDown className="h-4 w-4 shrink-0" />
-          Tento mesiac si už prišiel o <strong>{summary.lostEuros} €</strong> — Reely po termíne
-          alebo bez Pupio.
+          Tento mesiac si už prišiel o <strong>{summary.lostEuros} €</strong>
+          {isSimple ? " — dni bez Pupio Reelu." : " — Reely po termíne alebo bez Pupio."}
         </div>
       )}
 
@@ -119,23 +126,40 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
               Tvoj zostatok {summary.netEuros} € — čo to je
             </p>
             <p className="mt-1 text-slate-600">
-              Tvoj skutočný, aktuálny súčet: +3 body za každý zverejnený bežný Reel, +1 bod za
-              každý Pupio Reel, mínus všetky penalizácie za meškanie a chýbajúce Pupio Reely, plus
-              prípadné bonusy alebo manuálne úpravy od admina — spočítané za celý čas, nielen
-              tento mesiac. Presne rovnaké číslo vidíš aj v sekcii <strong>Profil</strong>.
+              {isSimple ? (
+                <>
+                  Si v <strong>jednoduchom režime</strong>: keď v jeden deň zverejníš oba bežné
+                  Reely, dostaneš +3 body dokopy — žiadne strhávanie za bežné Reely, nikdy nebudeš
+                  za ne v mínuse. Pupio ostáva rovnaké: +1 bod za Reel, mínus jeho vlastná
+                  penalizácia za deň bez Reelu. Plus prípadné bonusy či manuálne úpravy od admina
+                  — spočítané za celý čas, nielen tento mesiac.
+                </>
+              ) : (
+                <>
+                  Tvoj skutočný, aktuálny súčet: +3 body za každý zverejnený bežný Reel, +1 bod za
+                  každý Pupio Reel, mínus všetky penalizácie za meškanie a chýbajúce Pupio Reely,
+                  plus prípadné bonusy alebo manuálne úpravy od admina — spočítané za celý čas,
+                  nielen tento mesiac.
+                </>
+              )}{" "}
+              Presne rovnaké číslo vidíš aj v sekcii <strong>Profil</strong>, kde si môžeš{" "}
+              <strong>kedykoľvek prepnúť režim bodovania</strong>.
             </p>
           </div>
 
           <div>
             <p className="font-semibold text-slate-900">Odkiaľ je max {summary.maxEuros} € (tento mesiac)</p>
             <p className="mt-1 text-slate-600">
-              Denne máš naplánovaných {summary.rotationReelsPerDay} Reely z rotácie (á 3 body) a{" "}
+              Denne máš naplánovaných {summary.rotationReelsPerDay} Reely z rotácie
+              {isSimple ? " (spolu 3 body, ak zverejníš oba)" : " (á 3 body)"} a{" "}
               {summary.pupioReelsPerDay} Pupio Reely (á 1 bod). Tento mesiac má {summary.daysInMonth}{" "}
               dní, takže ak by si zverejnil úplne všetko:
             </p>
             <p className="mt-1.5 rounded-lg bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700">
-              ({summary.rotationReelsPerDay} × 3 b. + {summary.pupioReelsPerDay} × 1 b.) ×{" "}
-              {summary.daysInMonth} dní = {summary.maxEuros} b. = {summary.maxEuros} €
+              {isSimple
+                ? `(3 b. + ${summary.pupioReelsPerDay} × 1 b.)`
+                : `(${summary.rotationReelsPerDay} × 3 b. + ${summary.pupioReelsPerDay} × 1 b.)`}{" "}
+              × {summary.daysInMonth} dní = {summary.maxEuros} b. = {summary.maxEuros} €
             </p>
           </div>
 
@@ -154,11 +178,18 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
           <div>
             <p className="font-semibold text-slate-900">Ako môžeš prísť o peniaze</p>
             <ul className="mt-1 flex flex-col gap-1 text-slate-600">
-              <li>
-                • <strong>-5 €</strong> za každý Reel, ktorý sa nestihne zverejniť do termínu
-                (20:00) — od 27. 8. 2026, predtým -3 €. Pravidelnosť je dôležitá. Tento mesiac:{" "}
-                {summary.overdueCount}×.
-              </li>
+              {isSimple ? (
+                <li>
+                  • Za bežné Reely sa ti <strong>nič nestrháva</strong> — jediný spôsob, ako v
+                  jednoduchom režime prísť o body, je deň bez Pupio Reelu (pozri nižšie).
+                </li>
+              ) : (
+                <li>
+                  • <strong>-5 €</strong> za každý Reel, ktorý sa nestihne zverejniť do termínu
+                  (20:00) — od 27. 8. 2026, predtým -3 €. Pravidelnosť je dôležitá. Tento mesiac:{" "}
+                  {summary.overdueCount}×.
+                </li>
+              )}
               <li>
                 • Rovnaký postih za každý deň (od 26. 8. 2026), kedy nezverejníš ani jeden Pupio
                 Reel — tento mesiac: {summary.pupioMissedDays}×.
@@ -171,8 +202,9 @@ export function EarningsBanner({ summary }: { summary: EarningsSummary }) {
             <p className="font-semibold text-slate-900">Dnešok</p>
             <p className="mt-1 text-slate-600">
               Dnes máš naplánovaných {summary.todayTotal} Reelov, {summary.todayDone} už hotových.
-              Zvyšných {summary.todayRemaining} (bežné Reely á 3 body, Pupio á 1 bod) je spolu ešte{" "}
-              {summary.todayRemainingEuros} € na stole.
+              Zvyšných {summary.todayRemaining}{" "}
+              {isSimple ? "(bežné Reely spolu 3 body, Pupio á 1 bod)" : "(bežné Reely á 3 body, Pupio á 1 bod)"} je
+              spolu ešte {summary.todayRemainingEuros} € na stole.
             </p>
           </div>
         </div>

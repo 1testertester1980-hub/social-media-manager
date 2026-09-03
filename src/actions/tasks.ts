@@ -10,7 +10,7 @@ import {
   qualityPublishExtraSchema,
   analyticsSchema,
 } from "@/lib/validation";
-import { notifyTaskAssigned, notifyTaskPublished } from "@/lib/notify";
+import { notifyTaskAssigned, notifyTaskPublished, notifySimpleModeDayCompletedIfNeeded } from "@/lib/notify";
 import { zonedTimeToUtc } from "@/lib/utils";
 
 export type ActionResult<T = undefined> =
@@ -211,6 +211,10 @@ export async function publishTask(taskId: string, formData: FormData): Promise<A
   });
 
   await notifyTaskPublished(taskId);
+
+  if (!task.profile.qualityTracked && task.assignedUserId) {
+    await notifySimpleModeDayCompletedIfNeeded(task.assignedUserId, task.deadlineAt);
+  }
 
   if (qualityRequest) {
     const admins = await prisma.user.findMany({ where: { role: "ADMIN", active: true } });

@@ -63,6 +63,42 @@ async function getPublishedPoints(userId: string, range?: { gte?: Date; lt?: Dat
 }
 
 /**
+ * SIMPLE points mode (an alternative a worker can opt into on /account):
+ * the 2 daily rotation Reels earn a flat +3 for the day if both get
+ * published, 0 if not — no per-Reel points, no overdue penalty, no debt.
+ * Pupio is completely unaffected by this mode; it keeps its normal rules
+ * everywhere this is used.
+ */
+const SIMPLE_MODE_DAILY_POINTS = 3;
+
+async function getSimpleModeDailyPoints(userId: string, range?: { gte?: Date; lt?: Date }) {
+  const tasks = await prisma.contentTask.findMany({
+    where: {
+      assignedUserId: userId,
+      profile: { qualityTracked: false },
+      status: { not: "CANCELLED" },
+      deadlineAt: { gte: range?.gte, lt: range?.lt },
+    },
+    select: { deadlineAt: true, status: true },
+  });
+
+  const byDay = new Map<string, { total: number; published: number }>();
+  for (const t of tasks) {
+    const key = tzDayKey(t.deadlineAt);
+    const entry = byDay.get(key) ?? { total: 0, published: 0 };
+    entry.total++;
+    if (t.status === "PUBLISHED") entry.published++;
+    byDay.set(key, entry);
+  }
+
+  let daysCompleted = 0;
+  for (const { total, published } of byDay.values()) {
+    if (total > 0 && published >= total) daysCompleted++;
+  }
+  return { daysCompleted, points: daysCompleted * SIMPLE_MODE_DAILY_POINTS };
+}
+
+/**
  * The missed-Reel penalty went from 3 to 5 points, effective 27. 8. 2026 —
  * not retroactive. A Reel whose deadline fell before that date still costs
  * only 3 if missed; from that date on it costs 5. Applies uniformly to the
@@ -138,13 +174,14 @@ const EUR_PER_POINT = 1;
 
 /**
  * Best-case monthly earnings if every single scheduled Reel that month gets
- * published on time: weekday-rotation Reels/day × 3 body + active
- * fixed-count profiles' Reels/day (e.g. Pupio) × 1 bod, × days in month ×
- * 1 €/bod. Derived from the live schedule config, not hardcoded, so it
- * stays correct if the rotation, Pupio's daily count, or which profiles
- * count as "Pupio-rate" (qualityTracked) ever changes.
+ * published on time. STANDARD: weekday-rotation Reels/day × 3 body +
+ * active fixed-count profiles' Reels/day (e.g. Pupio) × 1 bod, × days in
+ * month. SIMPLE: a flat 3 body/day for the 2 rotation Reels (instead of
+ * per-Reel), + Pupio unchanged. Derived from the live schedule config, not
+ * hardcoded, so it stays correct if the rotation, Pupio's daily count, or
+ * which profiles count as "Pupio-rate" (qualityTracked) ever changes.
  */
-export async function getMaxMonthlyEarnings(year: number, month: number) {
+export async function getMaxMonthlyEarnings(year: number, month: number, isSimple = false) {
   const fixedCountProfiles = await prisma.profile.findMany({
     where: { active: true, dailyReelCount: { gt: 0 } },
     select: { dailyReelCount: true, qualityTracked: true },
@@ -162,7 +199,7 @@ export async function getMaxMonthlyEarnings(year: number, month: number) {
     const weekday = new Date(year, month - 1, day).getDay();
     const rotationReels = (WEEKDAY_ROTATION[weekday] ?? []).length;
     totalReels += rotationReels + fixedReelsPerDay;
-    maxPoints += rotationReels * POINTS_PER_PUBLISHED + fixedPointsPerDay;
+    maxPoints += (isSimple ? SIMPLE_MODE_DAILY_POINTS : rotationReels * POINTS_PER_PUBLISHED) + fixedPointsPerDay;
   }
 
   return {
@@ -182,7 +219,7 @@ export async function getMaxMonthlyEarnings(year: number, month: number) {
  * the current rates (3/regular Reel, 1/Pupio Reel), since any day in this
  * range is still in the future relative to the last rate change.
  */
-async function getRemainingMonthPoints(year: number, month: number, fromDay: number) {
+async function getRemainingMonthPoints(year: number, month: number, fromDay: number, isSimple = false) {
   const fixedCountProfiles = await prisma.profile.findMany({
     where: { active: true, dailyReelCount: { gt: 0 } },
     select: { dailyReelCount: true, qualityTracked: true },
@@ -197,7 +234,7 @@ async function getRemainingMonthPoints(year: number, month: number, fromDay: num
   for (let day = fromDay; day <= daysInMonth; day++) {
     const weekday = new Date(year, month - 1, day).getDay();
     const rotationReels = (WEEKDAY_ROTATION[weekday] ?? []).length;
-    points += rotationReels * POINTS_PER_PUBLISHED + fixedPointsPerDay;
+    points += (isSimple ? SIMPLE_MODE_DAILY_POINTS : rotationReels * POINTS_PER_PUBLISHED) + fixedPointsPerDay;
   }
   return points;
 }
@@ -222,23 +259,36 @@ export async function getEarningsSummary(userId: string) {
   const todayStart = zonedTimeToUtc(nowYear, nowMonth, nowDay, 0, 0);
   const todayEnd = new Date(todayStart.getTime() + 86400000);
 
-  const [publishedPoints, overduePenalty, pupioPenalty, todayTasks, maxMonth, monthAdjustments, netScore, remainingMonthPoints] =
-    await Promise.all([
-      getPublishedPoints(userId, { gte: monthStart, lt: monthEnd }),
-      getOverduePenalty(userId, { gte: monthStart, lt: monthEnd }),
-      getPupioMinimumPenalty(userId, { gte: monthStart, lt: monthEnd }),
-      prisma.contentTask.findMany({
-        where: { assignedUserId: userId, deadlineAt: { gte: todayStart, lt: todayEnd }, status: { not: "CANCELLED" } },
-        select: { status: true, profile: { select: { qualityTracked: true } } },
-      }),
-      getMaxMonthlyEarnings(nowYear, nowMonth),
-      prisma.pointsAdjustment.findMany({
-        where: { userId, category: "GENERAL", status: "APPROVED", createdAt: { gte: monthStart, lt: monthEnd } },
-        select: { amount: true },
-      }),
-      getUserPoints(userId),
-      getRemainingMonthPoints(nowYear, nowMonth, nowDay + 1),
-    ]);
+  const modeUser = await prisma.user.findUnique({ where: { id: userId }, select: { pointsMode: true } });
+  const isSimple = modeUser?.pointsMode === "SIMPLE";
+
+  const [
+    publishedPoints,
+    simpleDaily,
+    overduePenalty,
+    pupioPenalty,
+    todayTasks,
+    maxMonth,
+    monthAdjustments,
+    netScore,
+    remainingMonthPoints,
+  ] = await Promise.all([
+    getPublishedPoints(userId, { gte: monthStart, lt: monthEnd }),
+    isSimple ? getSimpleModeDailyPoints(userId, { gte: monthStart, lt: monthEnd }) : Promise.resolve(null),
+    isSimple ? Promise.resolve({ count: 0, points: 0 }) : getOverduePenalty(userId, { gte: monthStart, lt: monthEnd }),
+    getPupioMinimumPenalty(userId, { gte: monthStart, lt: monthEnd }),
+    prisma.contentTask.findMany({
+      where: { assignedUserId: userId, deadlineAt: { gte: todayStart, lt: todayEnd }, status: { not: "CANCELLED" } },
+      select: { status: true, profile: { select: { qualityTracked: true } } },
+    }),
+    getMaxMonthlyEarnings(nowYear, nowMonth, isSimple),
+    prisma.pointsAdjustment.findMany({
+      where: { userId, category: "GENERAL", status: "APPROVED", createdAt: { gte: monthStart, lt: monthEnd } },
+      select: { amount: true },
+    }),
+    getUserPoints(userId),
+    getRemainingMonthPoints(nowYear, nowMonth, nowDay + 1, isSimple),
+  ]);
 
   const overdueCount = overduePenalty.count;
   const pupioMissedDays = pupioPenalty.missedDays;
@@ -249,15 +299,24 @@ export async function getEarningsSummary(userId: string) {
   const adjustmentBonus = monthAdjustments.filter((a) => a.amount > 0).reduce((s, a) => s + a.amount, 0);
   const adjustmentPenalty = monthAdjustments.filter((a) => a.amount < 0).reduce((s, a) => s - a.amount, 0);
 
-  const earnedPoints = publishedPoints.points + adjustmentBonus;
+  const regularEarnedPoints = isSimple ? simpleDaily!.points : publishedPoints.regularPoints;
+  const earnedPoints = regularEarnedPoints + publishedPoints.pupioPoints + adjustmentBonus;
   const lostPoints = overduePenalty.points + pupioPenalty.points + adjustmentPenalty;
 
   const todayTotal = todayTasks.length;
   const todayDone = todayTasks.filter((t) => t.status === "PUBLISHED").length;
   const todayRemaining = todayTotal - todayDone;
-  const todayRemainingPoints = todayTasks
-    .filter((t) => t.status !== "PUBLISHED")
-    .reduce((sum, t) => sum + (t.profile.qualityTracked ? POINTS_PER_PUBLISHED_PUPIO_NEW : POINTS_PER_PUBLISHED), 0);
+
+  const regularTasksToday = todayTasks.filter((t) => !t.profile.qualityTracked);
+  const pupioTasksToday = todayTasks.filter((t) => t.profile.qualityTracked);
+  const regularRemainingPointsToday = isSimple
+    ? regularTasksToday.length > 0 && !regularTasksToday.every((t) => t.status === "PUBLISHED")
+      ? SIMPLE_MODE_DAILY_POINTS
+      : 0
+    : regularTasksToday.filter((t) => t.status !== "PUBLISHED").length * POINTS_PER_PUBLISHED;
+  const pupioRemainingPointsToday =
+    pupioTasksToday.filter((t) => t.status !== "PUBLISHED").length * POINTS_PER_PUBLISHED_PUPIO_NEW;
+  const todayRemainingPoints = regularRemainingPointsToday + pupioRemainingPointsToday;
 
   // Realistic month-end projection: his real current balance, plus what's
   // still winnable today, plus every remaining day this month — i.e. "if I
@@ -267,6 +326,7 @@ export async function getEarningsSummary(userId: string) {
   const projectedMonthEndPoints = netScore.points + todayRemainingPoints + remainingMonthPoints;
 
   return {
+    pointsMode: netScore.pointsMode,
     netPoints: netScore.points,
     netEuros: netScore.points * EUR_PER_POINT,
     earnedEuros: earnedPoints * EUR_PER_POINT,
@@ -289,18 +349,20 @@ export async function getEarningsSummary(userId: string) {
 
 /**
  * Worker score: bonusPoints (a manually set starting balance, set by an
- * admin) + 3 per published regular Reel + 1 per published Pupio Reel - the
- * overdue penalty (3/Reel before 27.8.2026, 5/Reel from that date on) - the
- * Pupio no-Reel-day penalty (same rate split, since 26.8.2026), plus the sum
- * of APPROVED adjustment entries (admin penalties, always pre-approved;
- * worker bonus requests only count once an admin approves them). The
- * task-derived parts are computed live from current status (not a stored
- * counter), so they self-correct if an admin later publishes an overdue
- * task.
+ * admin) + regular-Reel points + 1 per published Pupio Reel - the Pupio
+ * no-Reel-day penalty (rate split, since 26.8.2026), plus the sum of
+ * APPROVED adjustment entries (admin penalties, always pre-approved;
+ * worker bonus requests only count once an admin approves them). Regular
+ * Reels are scored per the worker's own pointsMode: STANDARD is 3/Reel
+ * minus a -5/-3 overdue penalty for a missed deadline; SIMPLE is a flat
+ * +3 for any day both daily rotation Reels get published, 0 otherwise —
+ * no overdue penalty at all. The task-derived parts are computed live
+ * from current status (not a stored counter), so they self-correct if an
+ * admin later publishes an overdue task.
  */
 export async function getUserPoints(userId: string) {
   const [user, publishedPoints, overduePenalty, pupioPenalty, adjustments] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { bonusPoints: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { bonusPoints: true, pointsMode: true } }),
     getPublishedPoints(userId),
     getOverduePenalty(userId),
     getPupioMinimumPenalty(userId),
@@ -309,20 +371,28 @@ export async function getUserPoints(userId: string) {
       orderBy: { createdAt: "desc" },
     }),
   ]);
+  const isSimple = user?.pointsMode === "SIMPLE";
+  const simpleDaily = isSimple ? await getSimpleModeDailyPoints(userId) : null;
+
+  const regularPoints = isSimple ? simpleDaily!.points : publishedPoints.regularPoints;
+  const regularOverdue = isSimple ? { count: 0, points: 0 } : overduePenalty;
+
   const bonusPoints = user?.bonusPoints ?? 0;
   const approved = adjustments.filter((a) => a.status === "APPROVED");
   const adjustmentTotal = approved.reduce((sum, a) => sum + a.amount, 0);
   return {
-    points: bonusPoints + publishedPoints.points - overduePenalty.points - pupioPenalty.points + adjustmentTotal,
+    points: bonusPoints + regularPoints + publishedPoints.pupioPoints - regularOverdue.points - pupioPenalty.points + adjustmentTotal,
+    pointsMode: (user?.pointsMode ?? "STANDARD") as "STANDARD" | "SIMPLE",
     bonusPoints,
     published: publishedPoints.count,
     publishedRegular: publishedPoints.regularCount,
-    publishedRegularPoints: publishedPoints.regularPoints,
+    publishedRegularPoints: regularPoints,
+    simpleDaysCompleted: simpleDaily?.daysCompleted ?? null,
     publishedPupio: publishedPoints.pupioCount,
     publishedPupioPoints: publishedPoints.pupioPoints,
-    publishedPoints: publishedPoints.points,
-    overdue: overduePenalty.count,
-    overduePenaltyPoints: overduePenalty.points,
+    publishedPoints: regularPoints + publishedPoints.pupioPoints,
+    overdue: regularOverdue.count,
+    overduePenaltyPoints: regularOverdue.points,
     pupioMinPenalty: pupioPenalty.points,
     pupioMissedDays: pupioPenalty.missedDays,
     adjustments,

@@ -1,4 +1,4 @@
-import { Clock, Trophy, CheckCircle2, AlertTriangle, KeyRound, Gem } from "lucide-react";
+import { Clock, Trophy, CheckCircle2, AlertTriangle, KeyRound, Gem, Gauge } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { WEEKDAY_ROTATION, DAILY_DEADLINE_HOUR, DAILY_DEADLINE_MINUTE } from "@/lib/rotation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -100,6 +100,37 @@ export default async function PravidlaPage() {
             Svoj aktuálny počet bodov vidíš vždy v sekcii{" "}
             <span className="font-medium text-slate-700">Profil</span>.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-indigo-200">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Gauge className="h-4 w-4 text-indigo-600" />
+            <CardTitle>Dva režimy bodovania — vyberieš si sám</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-slate-700">
+            V sekcii <strong>Profil</strong> si môžeš kedykoľvek vybrať, ako sa počítajú body za
+            tie 2 bežné Reely z dennej rotácie (Pupio sa tým netýka, ostáva vždy rovnaké):
+          </p>
+          <div className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
+            <Trophy className="h-5 w-5 shrink-0 text-amber-500" />
+            <p className="text-sm text-slate-700">
+              <strong>Plný systém</strong> — +3 body za každý Reel, -5 bodov za meškanie (pravidlá
+              vyššie). Vyšší strop, ale aj riziko mínusu.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg bg-emerald-50 px-3 py-2.5">
+            <Gauge className="h-5 w-5 shrink-0 text-emerald-600" />
+            <p className="text-sm text-emerald-800">
+              <strong>Jednoduchý, bez odpočítavania</strong> — zverejníš oba bežné Reely za jeden
+              deň = +3 body dokopy. Nezverejníš oba = 0 b. za ten deň, ale <strong>nikdy sa nič
+              nestrháva</strong>. Prechodom začínaš s +15 bodmi — čistý, povzbudivý štart.
+            </p>
+          </div>
+          <p className="text-sm text-slate-500">Kedykoľvek sa môžeš vrátiť späť na plný systém.</p>
         </CardContent>
       </Card>
 

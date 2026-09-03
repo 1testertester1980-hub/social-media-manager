@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { sendTelegramMessage, appUrl } from "@/lib/telegram";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, tzDayKey, zonedTimeToUtc } from "@/lib/utils";
 import type { NotificationType } from "@/generated/prisma";
 
 async function createNotification(params: {
@@ -204,4 +204,49 @@ export async function notifyTaskPublished(taskId: string) {
         `Link: ${task.instagramUrl ?? "—"}`
     );
   }
+}
+
+/**
+ * Immediate motivational nudge for the SIMPLE points mode: fires the
+ * moment a worker publishes the last of that day's regular (non-Pupio)
+ * rotation Reels, congratulating them on the spot for locking in that
+ * day's +3 — a same-day payoff instead of only seeing it later on
+ * /account. No-op for workers in STANDARD mode, or if the day isn't
+ * actually complete yet (fires exactly once, on the publish that
+ * completes it).
+ */
+export async function notifySimpleModeDayCompletedIfNeeded(userId: string, deadlineAt: Date) {
+  const worker = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { pointsMode: true, telegramChatId: true },
+  });
+  if (worker?.pointsMode !== "SIMPLE") return;
+
+  const [year, month, day] = tzDayKey(deadlineAt).split("-").map(Number);
+  const dayStart = zonedTimeToUtc(year, month, day, 0, 0);
+  const dayEnd = new Date(dayStart.getTime() + 86400000);
+
+  const dayTasks = await prisma.contentTask.findMany({
+    where: {
+      assignedUserId: userId,
+      profile: { qualityTracked: false },
+      status: { not: "CANCELLED" },
+      deadlineAt: { gte: dayStart, lt: dayEnd },
+    },
+    select: { status: true },
+  });
+  const allDone = dayTasks.length > 0 && dayTasks.every((t) => t.status === "PUBLISHED");
+  if (!allDone) return;
+
+  await createNotification({
+    userId,
+    type: "SYSTEM",
+    title: "Deň splnený! 🔥",
+    message: "Zverejnil si všetky dnešné bežné Reely — +3 body sú tvoje.",
+  });
+
+  await sendTelegramMessage(
+    worker.telegramChatId,
+    `🔥 <b>Deň splnený!</b>\n\nZverejnil si všetky dnešné bežné Reely — <b>+3 body</b> sú tvoje. Takto ďalej!`
+  );
 }

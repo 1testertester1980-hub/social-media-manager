@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
-import { Trophy, CheckCircle2, AlertTriangle, MinusCircle, Gem, Timer, Clock, Sparkles } from "lucide-react";
+import { Trophy, CheckCircle2, AlertTriangle, MinusCircle, Gem, Timer, Clock, Sparkles, Gauge } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { getUserPoints, getUserQualityPoints, getMaxMonthlyEarnings } from "@/lib/queries";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { AccountForm } from "@/components/account/account-form";
+import { PointsModeSwitcher } from "@/components/account/points-mode-switcher";
 import { cn, formatDateTime, tzDayKey } from "@/lib/utils";
 
 const MONTH_NAMES_SK = [
@@ -22,7 +23,8 @@ export default async function AccountPage() {
   const score = user.role === "WORKER" ? await getUserPoints(user.id) : null;
   const qualityScore = user.role === "WORKER" ? await getUserQualityPoints(user.id) : null;
   const [nowYear, nowMonth] = tzDayKey(new Date()).split("-").map(Number);
-  const maxEarnings = user.role === "WORKER" ? await getMaxMonthlyEarnings(nowYear, nowMonth) : null;
+  const isSimple = user.pointsMode === "SIMPLE";
+  const maxEarnings = user.role === "WORKER" ? await getMaxMonthlyEarnings(nowYear, nowMonth, isSimple) : null;
 
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-6">
@@ -50,22 +52,34 @@ export default async function AccountPage() {
               {score.points} b.
             </p>
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                <span className="text-sm text-emerald-800">
-                  {score.publishedRegular}× zverejnené (+{score.publishedRegularPoints} b.)
-                </span>
-              </div>
+              {score.pointsMode === "SIMPLE" ? (
+                <div className="col-span-2 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <span className="text-sm text-emerald-800">
+                    {score.simpleDaysCompleted}× splnený deň, oba Reely (+{score.publishedRegularPoints} b.) —
+                    jednoduchý režim, bez strhávania
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <span className="text-sm text-emerald-800">
+                      {score.publishedRegular}× zverejnené (+{score.publishedRegularPoints} b.)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2">
+                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                    <span className="text-sm text-red-800">
+                      {score.overdue}× po termíne (-{score.overduePenaltyPoints} b.)
+                    </span>
+                  </div>
+                </>
+              )}
               <div className="flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2">
                 <Gem className="h-4 w-4 text-purple-500" />
                 <span className="text-sm text-purple-800">
                   {score.publishedPupio}× Pupio (+{score.publishedPupioPoints} b.)
-                </span>
-              </div>
-              <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2">
-                <AlertTriangle className="h-4 w-4 text-red-600" />
-                <span className="text-sm text-red-800">
-                  {score.overdue}× po termíne (-{score.overduePenaltyPoints} b.)
                 </span>
               </div>
               {score.pupioMinPenalty > 0 && (
@@ -87,10 +101,24 @@ export default async function AccountPage() {
               )}
             </div>
             <p className="text-xs text-slate-400">
-              +3 body za každý včas zverejnený bežný Reel, +1 bod za každý Pupio Reel, -5 body za
-              každý, čo sa nestihol (od 27. 8. 2026, predtým -3) — pravidelnosť je dôležitá. Od
-              26. 8. 2026 aj rovnaký postih za každý deň, kedy nezverejníš aspoň 1 Pupio Reel.
+              {score.pointsMode === "SIMPLE"
+                ? "Jednoduchý režim: keď v ten istý deň zverejníš oba bežné Reely, dostaneš +3 body dokopy. Za bežné Reely sa ti nič nestrháva. Pupio ostáva rovnaké — +1 bod za Reel, -5 bodov, ak za daný deň nezverejníš ani jeden Pupio Reel."
+                : "+3 body za každý včas zverejnený bežný Reel, +1 bod za každý Pupio Reel, -5 body za každý, čo sa nestihol (od 27. 8. 2026, predtým -3) — pravidelnosť je dôležitá. Od 26. 8. 2026 aj rovnaký postih za každý deň, kedy nezverejníš aspoň 1 Pupio Reel."}
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {score && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Gauge className="h-4 w-4 text-indigo-600" />
+              <CardTitle>Režim bodovania</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <PointsModeSwitcher current={score.pointsMode} />
           </CardContent>
         </Card>
       )}
@@ -107,8 +135,18 @@ export default async function AccountPage() {
             <p className="text-4xl font-bold text-emerald-700">{maxEarnings.maxEuros} €</p>
             <p className="text-sm text-slate-600">
               Ak zverejníš úplne <strong>každý</strong> naplánovaný Reel v {MONTH_NAMES_SK[nowMonth - 1]} —{" "}
-              {maxEarnings.rotationReelsPerDay} bežné Reely/deň á 3 body + {maxEarnings.pupioReelsPerDay} Pupio
-              Reely/deň á 1 bod — získaš až {maxEarnings.maxPoints} bodov. 1 bod = 1 €.
+              {isSimple ? (
+                <>
+                  {maxEarnings.rotationReelsPerDay} bežné Reely/deň = 3 body dokopy + {maxEarnings.pupioReelsPerDay}{" "}
+                  Pupio Reely/deň á 1 bod
+                </>
+              ) : (
+                <>
+                  {maxEarnings.rotationReelsPerDay} bežné Reely/deň á 3 body + {maxEarnings.pupioReelsPerDay} Pupio
+                  Reely/deň á 1 bod
+                </>
+              )}{" "}
+              — získaš až {maxEarnings.maxPoints} bodov. 1 bod = 1 €.
             </p>
           </CardContent>
         </Card>

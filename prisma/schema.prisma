@@ -16,6 +16,20 @@ enum Role {
   WORKER
 }
 
+/**
+ * STANDARD: the full points system (3 b./regular Reel, 1 b./Pupio Reel,
+ * -5 penalty for a missed deadline or a Pupio no-Reel day). SIMPLE: no
+ * penalties for the 2 daily rotation Reels at all — publishing both on a
+ * given day earns a flat 3 b. for that day, publishing 0 or 1 earns
+ * nothing (no debt). Pupio's own rules (1 b./Reel, its no-Reel-day
+ * penalty, and separately-tracked quality points) are unchanged in both
+ * modes. A worker picks their own mode and can switch anytime.
+ */
+enum PointsMode {
+  STANDARD
+  SIMPLE
+}
+
 enum TaskStatus {
   PLANNED
   TODO
@@ -40,6 +54,7 @@ model User {
   telegramChatId String?
   active         Boolean  @default(true)
   bonusPoints    Int      @default(0)
+  pointsMode     PointsMode @default(STANDARD)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
